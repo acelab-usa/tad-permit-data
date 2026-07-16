@@ -2,7 +2,8 @@ import os
 import requests
 from dotenv import load_dotenv
 import database
-from permit import PermitSchema
+from permit import PermitSchemaV2
+from datetime import datetime
 
 load_dotenv()
 APP_TOKEN = os.getenv("SOCRATA_APP_TOKEN")
@@ -58,38 +59,89 @@ def fetch_permits(url, date_column, limit, page, app_token=APP_TOKEN,) -> list:
         return []
 
 
-def map_chicago_to_schema(raw: dict) -> PermitSchema:
-    full_address = f"{raw.get('street_number', '')} {raw.get('street_direction', '')} {raw.get('street_name', '')}".strip()
-    return PermitSchema(
-        permit_id=raw.get("permit_"),
-        jurisdiction="Chicago",
-        source_format="API",
-        filing_date=raw.get("application_start_date"),
-        permit_type=raw.get("permit_type"),
-        address=full_address,
-        owner_name=None,
-        contractor_name=raw.get("contact_2_name"),
-        valuation=raw.get("reported_cost"), 
-        square_footage=None,
-        raw_scope_of_work=raw.get("work_description")
-    )
+def map_chicago_to_schema(raw_item: dict) -> dict:
+    """
+    Maps raw Chicago API payload to our new PermitSchemaV2 dictionary structure.
+    """
+    # 1. Parse raw filing date safely
+    raw_date = raw_item.get("issue_date")
+    parsed_date = None
+    if raw_date:
+        # Standard Chicago date format helper
+        parsed_date = datetime.strptime(raw_date.split("T")[0], "%Y-%m-%d").date()
+
+    # 2. Build the exact dictionary Pydantic expects
+    return {
+        # --- Required Metadata ---
+        "permit_id": raw_item.get("permit_"),
+        "jurisdiction": "chicago",
+        "source_url": "https://data.cityofchicago.org/resource/ydr8-56us.json", # The API endpoint url
+        "source_format": "API",
+        
+        # --- Core Info ---
+        "address": f"{raw_item.get('street_number', '')} {raw_item.get('street_direction', '')} {raw_item.get('street_name', '')} {raw_item.get('suffix', '')}".strip(),
+        "filing_date": parsed_date,
+        "owner_name": raw_item.get("contact_1_name"),  # Chicago sometimes lists owner/contact here
+        "contractor_name": raw_item.get("contact_2_name"), # Chicago lists contractor info here
+        
+        # --- Taxonomies & Valuation ---
+        "permit_type_raw": raw_item.get("permit_type", "UNKNOWN"), # 👈 Missing field fixed!
+        "permit_type_normalized": "Other",  # Will be mapped cleanly by your LLM pipeline later
+        "square_footage": None,             # Not easily found in the default quick feed
+        "valuation": float(raw_item.get("reported_cost", 0)) if raw_item.get("reported_cost") else None,
+        
+        # --- Scopes ---
+        "raw_scope_of_work": raw_item.get("work_description", "No description provided."),
+        "scope_summary": raw_item.get("work_description", "No description provided.")[:150], # 👈 Default summary fallback
+        "building_systems": [] 
+    }
 
 
-def map_nyc_to_schema(raw: dict) -> PermitSchema:
-    full_address = f"{raw.get('house_no', '')} {raw.get('street_name', '')}, {raw.get('borough', '')} {raw.get('zip_code', '')}".strip()
-    return PermitSchema(
-        permit_id=raw.get("tracking_number"),
-        jurisdiction="NYC",
-        source_format="API",
-        filing_date=raw.get("issued_date"), # NYC provides the issue date directly here
-        permit_type=raw.get("work_type"),
-        address=full_address,
-        owner_name=raw.get("owner_name"),
-        contractor_name=raw.get("applicant_business_name"),
-        valuation=raw.get("estimated_job_costs"), 
-        square_footage=None,
-        raw_scope_of_work=raw.get("job_description")
-    )
+def map_nyc_to_schema(raw_item: dict) -> dict:
+    """
+    Maps raw NYC DOB NOW Approved Permits payload to our unified PermitSchemaV2.
+    """
+    # 1. Safely extract and parse a primary date
+    raw_date = raw_item.get("issued_date") or raw_item.get("approved_date")
+    parsed_date = None
+    if raw_date:
+        try:
+            date_str = str(raw_date).split("T")[0].strip()
+            parsed_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except (ValueError, IndexError):
+            parsed_date = None
+
+    # 2. Extract job reference
+    job_number = raw_item.get("work_permit") or raw_item.get("job_filing_number")
+    
+    # Remove placeholder values for job_number
+    job_number = "UNKNOWN" if not job_number or "Permit is" in str(job_number) else job_number
+
+    # 3. Construct the clean address (DOB NOW uses 'house_no' and 'street_name')
+    house_num = raw_item.get("house_no", "").strip()
+    street_name = raw_item.get("street_name", "").strip()
+    full_address = f"{house_num} {street_name}".strip()
+
+    # 4. Create fallback portal URL
+    source_url = f"https://a810-dobnow.nyc.gov/html/"
+
+    return {
+        "permit_id": job_number,
+        "jurisdiction": "nyc",
+        "source_url": source_url,
+        "source_format": "API",
+        "address": full_address or "UNKNOWN",
+        "filing_date": parsed_date,
+        "owner_name": raw_item.get("owner_s_business_name"),
+        "contractor_name": raw_item.get("licensee_s_business_name"),
+        "permit_type_raw": raw_item.get("filing_reason") or raw_item.get("work_type") or "UNKNOWN",
+        "permit_type_normalized": "Other",
+        "square_footage": None,
+        "valuation": float(raw_item.get("estimated_job_costs", 0)) if raw_item.get("estimated_job_costs") else None,
+        "raw_scope_of_work": f"Work on Floor: {raw_item.get('work_on_floor', 'N/A')}. Job Description: {raw_item.get('job_description', 'N/A')}",
+        "scope_summary": f"Permit issued for {raw_item.get('work_type', 'general')} construction.",
+        "building_systems": [] 
+    }
 
 
 def load_data(city: str = "chicago", size=100):
@@ -102,7 +154,7 @@ def load_data(city: str = "chicago", size=100):
     config = CITY_CONFIGS[city]
     
     # 1. Fetch live data
-    raw_records = fetch_permits(url=config["url"], date_column=config["date_column"], limit=size, page=1)
+    raw_records = fetch_permits(url=config["url"], date_column=config["date_column"], limit=size, page=10)
     
     mapper_func = map_chicago_to_schema if city == "chicago" else map_nyc_to_schema
 
@@ -110,7 +162,8 @@ def load_data(city: str = "chicago", size=100):
     for raw_item in raw_records:
         try:
             # Validate and create the Pydantic object
-            validated_permit = mapper_func(raw_item)
+            validated_permit = PermitSchemaV2(**mapper_func(raw_item))
+
 
             # 3. Pass the Pydantic object directly to the database!
             inserted = database.insert_permit(validated_permit)
@@ -127,8 +180,8 @@ if __name__ == "__main__":
     print("--- INGESTING CHICAGO DATA ---")
     load_data("chicago", size=100)
     
-    '''
+    
     # Test loading NYC data
     print("\n--- INGESTING NYC DATA ---")
     load_data("nyc", size=100)
-    '''
+    

@@ -1,36 +1,38 @@
 import sqlite3
 from datetime import datetime
-from permit import PermitSchema
+from permit import PermitSchemaV2
+import json
 
-DB_NAME = "building_permits.db"
+DB_NAME = "permits.db"
 
 def init_db():
     """Initializes the SQLite database and creates the unified permits table."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
-    # Create the unified schema v1 table
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS building_permits (
+        CREATE TABLE IF NOT EXISTS permits (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             permit_id TEXT NOT NULL,
             jurisdiction TEXT NOT NULL,
+            source_url TEXT,
             source_format TEXT NOT NULL,
             extracted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             
             filing_date TEXT,
-            permit_type TEXT,
+            permit_type_raw TEXT,
+            permit_type_normalized TEXT,
             address TEXT,
             owner_name TEXT,
             contractor_name TEXT,
             valuation REAL,
-            square_footage REAL,  -- Will remain NULL for API sources
+            square_footage REAL,
             
             raw_scope_of_work TEXT,
-            model_scope_summary TEXT,          -- Handled by LLM later
-            materials_systems_mentioned TEXT,  -- Handled by LLM later
+            scope_summary TEXT,
+            building_systems TEXT,
             
-            UNIQUE(permit_id, jurisdiction)   -- Avoids duplicate inserts
+            UNIQUE(permit_id, jurisdiction)
         )
     ''')
     
@@ -38,38 +40,39 @@ def init_db():
     conn.close()
     print(f"✅ Database initialized successfully: '{DB_NAME}'")
 
-def insert_permit(permit: PermitSchema) -> bool:
+def insert_permit(permit: PermitSchemaV2) -> bool:
     """Accepts a fully validated Pydantic PermitSchema object directly."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
     sql = '''
-        INSERT OR IGNORE INTO building_permits (
-            permit_id, jurisdiction, source_format, filing_date, 
-            permit_type, address, owner_name, contractor_name, 
-            valuation, square_footage, raw_scope_of_work,
-            model_scope_summary, materials_systems_mentioned
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    '''
+        INSERT OR IGNORE INTO permits (
+                permit_id, jurisdiction, source_url, source_format, address, filing_date,
+                owner_name, contractor_name, permit_type_raw, permit_type_normalized,
+                square_footage, valuation, raw_scope_of_work, scope_summary, building_systems
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        '''
     
     # Safely unpack the Pydantic data properties
     # Convert the materials list to a string or keep it None if empty
-    materials_string = ", ".join(permit.materials_systems_mentioned) if permit.materials_systems_mentioned else None
+    materials_string = ", ".join(permit.building_systems) if permit.building_systems else None
     
     values = (
         permit.permit_id,
         permit.jurisdiction,
+        permit.source_url,
         permit.source_format,
-        permit.filing_date,
-        permit.permit_type,
         permit.address,
+        permit.filing_date,
         permit.owner_name,
         permit.contractor_name,
-        permit.valuation,
+        permit.permit_type_raw,
+        permit.permit_type_normalized,
         permit.square_footage,
+        permit.valuation,
         permit.raw_scope_of_work,
-        permit.model_scope_summary,
-        materials_string
+        permit.scope_summary,
+        json.dumps(permit.building_systems) if permit.building_systems else "[]"
     )
     
     cursor.execute(sql, values)
