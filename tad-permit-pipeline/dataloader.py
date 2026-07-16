@@ -2,6 +2,7 @@ import os
 import requests
 from dotenv import load_dotenv
 import database
+from hatchet_sdk import Hatchet
 from permit import PermitSchemaV2
 from datetime import datetime
 
@@ -143,6 +144,7 @@ def map_nyc_to_schema(raw_item: dict) -> dict:
         "building_systems": [] 
     }
 
+hatchet = Hatchet()
 
 def load_data(city: str = "chicago", size=100):
     city = city.lower()
@@ -155,7 +157,6 @@ def load_data(city: str = "chicago", size=100):
     
     # 1. Fetch live data
     raw_records = fetch_permits(url=config["url"], date_column=config["date_column"], limit=size, page=10)
-    
     mapper_func = map_chicago_to_schema if city == "chicago" else map_nyc_to_schema
 
     # 2. Loop through and process records
@@ -169,6 +170,16 @@ def load_data(city: str = "chicago", size=100):
             inserted = database.insert_permit(validated_permit)
             if inserted:
                 print(f"  🎉 Saved: Permit {validated_permit.permit_id} ({validated_permit.address})")
+
+                # If NYC, offload the heavy PDF processing to our Hatchet Queue!
+                if city == "nyc":
+                    print(f"  📡 Enqueuing Hatchet background job for {validated_permit.permit_id}...")
+                    
+                    # Push events
+                    hatchet.event.push(
+                        "permit:enrich",
+                        {"permit_id": validated_permit.permit_id}
+                    )
             else:
                 print(f"  ⚠️ Skipped: Permit {validated_permit.permit_id} already exists.")
                 
