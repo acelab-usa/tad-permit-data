@@ -1,0 +1,11 @@
+[project]
+name = "tad-permit-pipeline"
+version = "0.1.0"
+description = "Acelab Permit Parsing Pipeline Project"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "dotenv>=0.9.9",
+    "pydantic>=2.13.4",
+    "requests>=2.34.2",
+]
