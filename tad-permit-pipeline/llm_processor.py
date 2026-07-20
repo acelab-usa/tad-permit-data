@@ -64,6 +64,7 @@ def extract_multiple_permits_from_text(chunk_text: str) -> MonthlyPDFPageExtract
         response = client.chat.completions.create(
             model="google/gemini-2.5-flash",
             response_format={"type": "json_object"},
+            max_tokens=4000,
             messages=[
                 {
                     "role": "system",
@@ -83,12 +84,25 @@ def extract_multiple_permits_from_text(chunk_text: str) -> MonthlyPDFPageExtract
                         "      'contractor_name': 'string',\n"
                         "      'valuation': 0.0,\n"
                         "      'square_footage': 0.0,\n"
-                        "      'raw_scope_of_work': 'verbatim text from document',\n"
+                        "      'raw_scope_of_work': 'verbatim description text from document',\n"
                         "      'scope_summary': '1 sentence summary',\n"
                         "      'building_systems': ['material1', 'material2']\n"
                         "    }\n"
                         "  ]\n"
                         "}"
+                    )
+                },
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an expert data extraction engine parsing a municipal ledger page.\n"
+                        "CRITICAL BLOCK-IDENTIFICATION RULES:\n"
+                        "1. Every distinct permit entry begins at the far left with a unique alpha-numeric Permit Number pattern "
+                        "(e.g., '000397-2026-CO', '000808-2026-CO*', '007623-2025-CB*').\n"
+                        "2. IGNORE the text color of the permit number—it may be RED or DARK BLUE depending on the work class category.\n"
+                        "3. Extract all permit classifications on the page, including 'Commercial Building - Alteration', "
+                        "'Certificate of Occupancy - C/O Stand Alone', 'Commercial Misc', etc.\n"
+                        "4. Disregard lines containing summary metrics or 'SUBTOTALS'."
                     )
                 },
                 {

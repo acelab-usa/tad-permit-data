@@ -166,7 +166,7 @@ def monthly_pdf_ingestion(folder_path: str = "./temp_pdfs", month_cap: int = 1, 
                 
                 for page_idx in range(total_pages):
                     page = doc[page_idx]
-                    page_text = page.get_text()
+                    page_text = page.get_text("text", sort=True)
                     
                     if not page_text.strip():
                         continue # Skip empty blank spacer pages
@@ -232,14 +232,14 @@ def load_data(city: str = "chicago", size=100):
 hatchet = Hatchet()
 
 if __name__ == "__main__":
-    # Test loading Chicago data
-    print("--- INGESTING CHICAGO DATA ---")
-    load_data("chicago", size=100)
+    # # Test loading Chicago data
+    # print("--- INGESTING CHICAGO DATA ---")
+    # load_data("chicago", size=100)
     
     
-    # Test loading NYC data
-    print("\n--- INGESTING NYC DATA ---")
-    load_data("nyc", size=100)
+    # # Test loading NYC data
+    # print("\n--- INGESTING NYC DATA ---")
+    # load_data("nyc", size=100)
     
     # Test loading Allen data
     print("\n--- INGESTING ALLEN DATA ---")
