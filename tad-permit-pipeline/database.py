@@ -53,10 +53,6 @@ def insert_permit(permit: PermitSchemaV2) -> bool:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         '''
     
-    # Safely unpack the Pydantic data properties
-    # Convert the materials list to a string or keep it None if empty
-    materials_string = ", ".join(permit.building_systems) if permit.building_systems else None
-    
     values = (
         permit.permit_id,
         permit.jurisdiction,
@@ -80,6 +76,14 @@ def insert_permit(permit: PermitSchemaV2) -> bool:
     changes = conn.total_changes
     conn.close()
     return changes > 0
+
+def get_connection():
+    """Creates and returns a connection to the SQLite database."""
+    # Replace 'permits.db' with your actual database filename
+    conn = sqlite3.connect("permits.db")
+    # This allows fetching rows as dictionaries instead of raw tuples if desired
+    conn.row_factory = sqlite3.Row 
+    return conn
 
 if __name__ == "__main__":
     init_db()
