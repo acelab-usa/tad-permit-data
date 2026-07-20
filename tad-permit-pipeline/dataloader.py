@@ -5,9 +5,8 @@ import database
 from hatchet_sdk import Hatchet
 from permit import PermitSchemaV2
 from datetime import datetime
-import json
 import database
-import llm_processor
+import fitz
 
 load_dotenv()
 APP_TOKEN = os.getenv("SOCRATA_APP_TOKEN")
@@ -21,7 +20,7 @@ CITY_CONFIGS = {
     },
     "nyc": {
         "url": "https://data.cityofnewyork.us/api/v3/views/rbx6-tga4/query.json",
-        "date_column": "issued_date" # NYC uses 'issued_date' on dataset rbx6-tga4
+        "date_column": "issued_date"
     }
 }
 
@@ -144,44 +143,90 @@ def map_nyc_to_schema(raw_item: dict) -> dict:
     }
 
 
-def load_data(city: str = "chicago", size=100):
-    city = city.lower()
-    if city not in CITY_CONFIGS:
-        print(f"❌ Unknown city target context: {city}")
+def monthly_pdf_ingestion(folder_path: str = "./temp_pdfs", month_cap: int = 1, page_cap: int = None):
+    """
+    Scans for large multi-page monthly PDF reports, rips them into single page 
+    text strings, and streams them out as parallel tasks via Hatchet.
+    """
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
         return
 
-    database.init_db()
-    config = CITY_CONFIGS[city]
-    
-    # 1. Fetch live data
-    raw_records = fetch_permits(url=config["url"], date_column=config["date_column"], limit=size, page=1)
-    mapper_func = map_chicago_to_schema if city == "chicago" else map_nyc_to_schema
+    pdf_files = [f for f in os.listdir(folder_path) if f.lower().endswith('.pdf')]
 
-    # 2. Loop through and process records
-    for raw_item in raw_records:
+    for i in range(month_cap):
+        filename = pdf_files[i]
+        local_path = os.path.join(folder_path, filename)
+        print(f"📖 Opening monthly compilation report: {filename}")
+        
         try:
-            # Validate and create the Pydantic object
-            validated_permit = PermitSchemaV2(**mapper_func(raw_item))
-
-            if city == "nyc" and validated_permit.permit_id == NYC_NO_PERMIT:
-                print(f"  ⚠️ ({city}) Skipping: {validated_permit.permit_id}")
-                continue
-
-            # 3. Pass the Pydantic object directly to the database!
-            inserted = database.insert_permit(validated_permit)
-            if inserted:
-                print(f"  🎉 ({city}) Saved: Permit {validated_permit.permit_id} ({validated_permit.address})")
+            with fitz.open(local_path) as doc:
+                total_pages = page_cap if page_cap != None else len(doc)
+                print(f"⚡ Discovered {total_pages} total ledger pages. Splitting into Hatchet queue...")
                 
-                hatchet.event.push(
-                    "permit:enrich",
-                    {"permit_id": validated_permit.permit_id, "raw_text": validated_permit.raw_scope_of_work}
-                )
-
-            else:
-                print(f"  ⚠️ ({city}) Skipped: Permit {validated_permit.permit_id} already exists.")
-                
+                for page_idx in range(total_pages):
+                    page = doc[page_idx]
+                    page_text = page.get_text()
+                    
+                    if not page_text.strip():
+                        continue # Skip empty blank spacer pages
+                        
+                    # Send each individual page text payload out as its own event
+                    hatchet.event.push(
+                        "pdf:process",
+                        {
+                            "source_pdf_name": filename,
+                            "page_number": page_idx + 1,
+                            "page_text": page_text
+                        }
+                    )
+            
         except Exception as e:
-            print(f"Failed to parse a record: {e}")
+            print(f"❌ Error splitting monthly ledger {filename}: {e}")
+
+
+def load_data(city: str = "chicago", size=100):
+    city = city.lower()
+    database.init_db()
+
+    # Structured API Data Handling
+    if city in CITY_CONFIGS:
+        config = CITY_CONFIGS[city]
+        
+        # 1. Fetch live data
+        raw_records = fetch_permits(url=config["url"], date_column=config["date_column"], limit=size, page=1)
+        mapper_func = map_chicago_to_schema if city == "chicago" else map_nyc_to_schema
+
+        # 2. Loop through and process records
+        for raw_item in raw_records:
+            try:
+                # Validate and create the Pydantic object
+                validated_permit = PermitSchemaV2(**mapper_func(raw_item))
+
+                if city == "nyc" and validated_permit.permit_id == NYC_NO_PERMIT:
+                    print(f"  ⚠️ ({city}) Skipping: {validated_permit.permit_id}")
+                    continue
+
+                # 3. Pass the Pydantic object directly to the database!
+                inserted = database.insert_permit(validated_permit)
+                if inserted:
+                    print(f"  🎉 ({city}) Saved: Permit {validated_permit.permit_id} ({validated_permit.address})")
+                    
+                    hatchet.event.push(
+                        "permit:enrich",
+                        {"permit_id": validated_permit.permit_id, "raw_text": validated_permit.raw_scope_of_work}
+                    )
+
+                else:
+                    print(f"  ⚠️ ({city}) Skipped: Permit {validated_permit.permit_id} already exists.")
+                    
+            except Exception as e:
+                print(f"Failed to parse a record: {e}")
+    
+    # Default to Local PDF Ingestion
+    else:
+        if city == "allen":
+            monthly_pdf_ingestion(folder_path = './allen_pdfs', page_cap=int(size/5))
 
 
 hatchet = Hatchet()
@@ -196,3 +241,6 @@ if __name__ == "__main__":
     print("\n--- INGESTING NYC DATA ---")
     load_data("nyc", size=100)
     
+    # Test loading Allen data
+    print("\n--- INGESTING ALLEN DATA ---")
+    load_data("allen", size=100)
