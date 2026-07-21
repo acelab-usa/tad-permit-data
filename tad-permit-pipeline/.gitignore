@@ -12,4 +12,12 @@ __pycache__/
 # Operating System files
 .DS_Store
 Thumbs.db
+
+# Secrets - never commit real credentials
 .env
+.env.*
+!.env.example
+
+# Logs
+pipeline.log
+pipeline.log.*

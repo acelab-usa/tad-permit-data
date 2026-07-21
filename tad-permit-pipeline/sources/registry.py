@@ -1,0 +1,130 @@
+"""Registers every jurisdiction the pipeline knows how to ingest.
+
+To onboard a new jurisdiction, add one entry to SOURCES below -- either a
+SocrataAPISource (write a small mapper function) or a PDFLedgerSource (point
+it at a folder). Nothing else in the pipeline needs to change.
+"""
+from datetime import datetime
+from typing import Optional
+
+from logging_setup import get_logger
+from sources.pdf_ledger import PDFLedgerSource
+from sources.socrata import SocrataAPISource
+
+logger = get_logger("sources.registry")
+
+
+def _safe_float(value) -> Optional[float]:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_date(raw_date: Optional[str]):
+    if not raw_date:
+        return None
+    try:
+        date_str = str(raw_date).split("T")[0].strip()
+        return datetime.strptime(date_str, "%Y-%m-%d").date()
+    except (ValueError, IndexError):
+        logger.warning("Could not parse date %r, storing as null", raw_date)
+        return None
+
+
+def map_chicago_to_schema(raw_item: dict) -> dict:
+    """Maps raw Chicago API payload to our PermitSchemaV2 dictionary structure."""
+    parsed_date = _safe_date(raw_item.get("issue_date"))
+
+    address_parts = [
+        raw_item.get("street_number") or "",
+        raw_item.get("street_direction") or "",
+        raw_item.get("street_name") or "",
+        raw_item.get("suffix") or "",
+    ]
+
+    return {
+        "permit_id": raw_item.get("permit_"),
+        "jurisdiction": "chicago",
+        "source_url": "https://data.cityofchicago.org/resource/ydr8-56us.json",
+        "source_format": "API",
+        "address": " ".join(p for p in address_parts if p).strip() or "UNKNOWN",
+        "filing_date": parsed_date,
+        "owner_name": raw_item.get("contact_1_name"),
+        "contractor_name": raw_item.get("contact_2_name"),
+        "permit_type_raw": raw_item.get("permit_type", "UNKNOWN"),
+        "permit_type_normalized": "Other",
+        "square_footage": None,
+        "valuation": _safe_float(raw_item.get("reported_cost")),
+        "raw_scope_of_work": raw_item.get("work_description") or "No description provided.",
+        "scope_summary": (raw_item.get("work_description") or "No description provided.")[:150],
+        "building_systems": [],
+    }
+
+
+def map_nyc_to_schema(raw_item: dict) -> dict:
+    """Maps raw NYC DOB NOW Approved Permits payload to our unified PermitSchemaV2."""
+    raw_date = raw_item.get("issued_date") or raw_item.get("approved_date")
+    parsed_date = _safe_date(raw_date)
+
+    house_num = (raw_item.get("house_no") or "").strip()
+    street_name = (raw_item.get("street_name") or "").strip()
+    full_address = f"{house_num} {street_name}".strip()
+
+    return {
+        "permit_id": raw_item.get("job_filing_number"),
+        "jurisdiction": "nyc",
+        "source_url": "https://a810-dobnow.nyc.gov/html/",
+        "source_format": "API",
+        "address": full_address or "UNKNOWN",
+        "filing_date": parsed_date,
+        "owner_name": raw_item.get("owner_s_business_name"),
+        "contractor_name": raw_item.get("licensee_s_business_name"),
+        "permit_type_raw": raw_item.get("filing_reason") or raw_item.get("work_type") or "UNKNOWN",
+        "permit_type_normalized": "Other",
+        "square_footage": None,
+        "valuation": _safe_float(raw_item.get("estimated_job_costs")),
+        "raw_scope_of_work": (
+            f"Work on Floor: {raw_item.get('work_on_floor', 'N/A')}. "
+            f"Job Description: {raw_item.get('job_description', 'N/A')}"
+        ),
+        "scope_summary": f"Permit issued for {raw_item.get('work_type', 'general')} construction.",
+        "building_systems": [],
+    }
+
+
+SOURCES = {
+    "chicago": SocrataAPISource(
+        name="chicago",
+        url="https://data.cityofchicago.org/api/v3/views/ydr8-5enu/query.json",
+        date_column="issue_date",
+        mapper_func=map_chicago_to_schema,
+    ),
+    "nyc": SocrataAPISource(
+        name="nyc",
+        url="https://data.cityofnewyork.us/api/v3/views/rbx6-tga4/query.json",
+        date_column="issued_date",
+        mapper_func=map_nyc_to_schema,
+        skip_sentinel_field="permit_id",
+        skip_sentinel_value="Permit is no",
+    ),
+    "allen": PDFLedgerSource(
+        name="allen",
+        folder_path="./allen_pdfs",
+    ),
+}
+
+
+def get_source(name: str):
+    try:
+        return SOURCES[name.lower()]
+    except KeyError:
+        raise ValueError(
+            f"Unknown jurisdiction '{name}'. Available: {', '.join(sorted(SOURCES))}"
+        )
+
+
+def list_sources() -> list[str]:
+    return sorted(SOURCES.keys())
