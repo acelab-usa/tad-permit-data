@@ -22,6 +22,7 @@ The pipeline is intentionally decoupled into separate layers to maintain high co
 * **`dashboard.py`**: The **Lookup UI Layer**. A read-only Streamlit app for searching/filtering the unified `permits` table.
 * **`logging_setup.py`**: Shared logging config (console + rotating `pipeline.log` file) used by every module above instead of ad-hoc `print()` calls.
 * **`eval/`**: The **Quality Eval Layer**. Scores `llm_processor.py`'s live output against hand-labeled golden cases to catch extraction/enrichment quality regressions. See `eval/README.md`.
+* **`permit_types.py`**: The **Taxonomy Layer**. One fixed set of permit-type categories (`New Construction`, `Alteration`, `Demolition`, etc.) and a `normalize_permit_type()` keyword matcher every source maps into — this is what makes `permit_type_normalized` actually comparable/filterable across jurisdictions instead of each source inventing its own values.
 
 ---
 
@@ -66,7 +67,7 @@ The incoming datasets are normalized into a single database table (`building_per
 | `extracted_at` | `TIMESTAMP`| Chronological processing audit timestamp record. |
 | `filing_date` | `TEXT` | Chronological date tracking stamp for the application filing. |
 | `permit_type_raw` | `TEXT` | Original, un-normalized string categorizing the permit type. |
-| `permit_type_normalized`| `TEXT` | Cleaned, universally mapped taxonomy grouping. |
+| `permit_type_normalized`| `TEXT` | One of a fixed taxonomy (see `permit_types.py`): `New Construction`, `Alteration`, `Demolition`, `Electrical`, `Plumbing`, `Mechanical`, `Roofing`, `Certificate of Occupancy`, `Sign`, `Fire/Life Safety`, `Other`. Always derived by `normalize_permit_type()`, never sourced directly. |
 | `address` | `TEXT` | Combined full physical street location entry. |
 | `owner_name` | `TEXT` | Name of the recorded building/property owner. |
 | `contractor_name` | `TEXT` | Registered corporate name of the designated builder. |

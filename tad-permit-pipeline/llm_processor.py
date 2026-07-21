@@ -133,7 +133,6 @@ def extract_multiple_permits_from_text(chunk_text: str) -> MonthlyPDFPageExtract
                         "      'permit_id': 'string',\n"
                         "      'filing_date': 'YYYY-MM-DD',\n"
                         "      'permit_type_raw': 'string',\n"
-                        "      'permit_type_normalized': 'string',\n"
                         "      'address': 'string',\n"
                         "      'owner_name': 'string',\n"
                         "      'contractor_name': 'string',\n"
