@@ -21,6 +21,10 @@ CITY_CONFIGS = {
     "nyc": {
         "url": "https://data.cityofnewyork.us/api/v3/views/rbx6-tga4/query.json",
         "date_column": "issued_date"
+    },
+    "austin": {
+        "url": "https://data.austintexas.gov/api/v3/views/3syk-w9eu/query.json",
+        "date_column": "issue_date"
     }
 }
 
@@ -143,6 +147,58 @@ def map_nyc_to_schema(raw_item: dict) -> dict:
     }
 
 
+def map_austin_to_schema(raw_item: dict) -> dict:
+    """
+    Maps raw Austin API payload to our new PermitSchemaV2 dictionary structure.
+    """
+    # 1. Parse raw filing date safely
+    raw_date = raw_item.get("issue_date")
+    parsed_date = None
+    if raw_date:
+        # Standard Socrata timestamp layout extractor
+        try:
+            parsed_date = datetime.strptime(raw_date.split("T")[0], "%Y-%m-%d").date()
+        except (ValueError, IndexError):
+            pass
+
+    # 2. Extract valuation metrics safely
+    raw_val = raw_item.get("total_valuation_remit")
+    valuation = float(raw_val) if raw_val is not None else None
+
+    # 3. Extract square footage safely
+    raw_sqft = raw_item.get("total_job_sq_ft")
+    square_footage = float(raw_sqft) if raw_sqft is not None else None
+
+    # 4. Construct raw scope fallbacks
+    raw_scope = raw_item.get("description", raw_item.get("project_name", "No description provided."))
+
+    # 5. Build the exact dictionary Pydantic expects
+    return {
+        # --- Required Metadata ---
+        "permit_id": raw_item.get("permit_number"),
+        "jurisdiction": "austin",
+        "source_url": "https://data.austintexas.gov/resource/3syk-w9eu.json", # The API endpoint url
+        "source_format": "API",
+        
+        # --- Core Info ---
+        "address": raw_item.get("original_address_1", "").strip(),
+        "filing_date": parsed_date,
+        "owner_name": None,  # Austin redacts primary owners from this endpoint due to privacy laws
+        "contractor_name": raw_item.get("contractor_company_name", raw_item.get("contractor_name")),
+        
+        # --- Taxonomies & Valuation ---
+        "permit_type_raw": raw_item.get("work_class", "UNKNOWN"),
+        "permit_type_normalized": raw_item.get("permit_class_mapped", "Other"),
+        "square_footage": square_footage,             
+        "valuation": valuation,
+        
+        # --- Scopes ---
+        "raw_scope_of_work": raw_scope,
+        "scope_summary": raw_scope[:150] if raw_scope else "No description provided.",
+        "building_systems": [] 
+    }
+
+
 def monthly_pdf_ingestion(folder_path: str = "./temp_pdfs", month_cap: int = 1, page_cap: int = None):
     """
     Scans for large multi-page monthly PDF reports, rips them into single page 
@@ -195,7 +251,13 @@ def load_data(city: str = "chicago", size=100):
         
         # 1. Fetch live data
         raw_records = fetch_permits(url=config["url"], date_column=config["date_column"], limit=size, page=1)
-        mapper_func = map_chicago_to_schema if city == "chicago" else map_nyc_to_schema
+        match city:
+            case "chicago":
+                mapper_func = map_chicago_to_schema
+            case "nyc":
+                mapper_func = map_nyc_to_schema
+            case "austin":
+                mapper_func = map_austin_to_schema
 
         # 2. Loop through and process records
         for raw_item in raw_records:
@@ -232,15 +294,18 @@ def load_data(city: str = "chicago", size=100):
 hatchet = Hatchet()
 
 if __name__ == "__main__":
-    # # Test loading Chicago data
-    # print("--- INGESTING CHICAGO DATA ---")
-    # load_data("chicago", size=100)
+    # Test loading Chicago data
+    print("--- INGESTING CHICAGO DATA ---")
+    load_data("chicago", size=100)
     
-    
-    # # Test loading NYC data
-    # print("\n--- INGESTING NYC DATA ---")
-    # load_data("nyc", size=100)
-    
+    # Test loading NYC data
+    print("\n--- INGESTING NYC DATA ---")
+    load_data("nyc", size=100)
+
+    # Test loading Austin data
+    print("--- INGESTING AUSTIN DATA ---")
+    load_data("austin", size=100)
+
     # Test loading Allen data
     print("\n--- INGESTING ALLEN DATA ---")
     load_data("allen", size=100)
