@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Optional
 
 from logging_setup import get_logger
+from permit_types import normalize_permit_type
 from sources.pdf_ledger import PDFLedgerSource
 from sources.socrata import SocrataAPISource
 
@@ -55,7 +56,7 @@ def map_chicago_to_schema(raw_item: dict) -> dict:
         "owner_name": raw_item.get("contact_1_name"),
         "contractor_name": raw_item.get("contact_2_name"),
         "permit_type_raw": raw_item.get("permit_type", "UNKNOWN"),
-        "permit_type_normalized": "Other",
+        "permit_type_normalized": normalize_permit_type(raw_item.get("permit_type")),
         "square_footage": None,
         "valuation": _safe_float(raw_item.get("reported_cost")),
         "raw_scope_of_work": raw_item.get("work_description") or "No description provided.",
@@ -82,8 +83,13 @@ def map_nyc_to_schema(raw_item: dict) -> dict:
         "filing_date": parsed_date,
         "owner_name": raw_item.get("owner_s_business_name"),
         "contractor_name": raw_item.get("licensee_s_business_name"),
-        "permit_type_raw": raw_item.get("filing_reason") or raw_item.get("work_type") or "UNKNOWN",
-        "permit_type_normalized": "Other",
+        # work_type carries the actual construction category (e.g. "Plumbing",
+        # "Mechanical"); filing_reason is permit lifecycle status (e.g.
+        # "Initial Permit", "Renewal Permit Without Changes") and is present
+        # on essentially every record, so ordering it first (as this used to)
+        # meant work_type was never actually used.
+        "permit_type_raw": raw_item.get("work_type") or raw_item.get("filing_reason") or "UNKNOWN",
+        "permit_type_normalized": normalize_permit_type(raw_item.get("work_type"), raw_item.get("filing_reason")),
         "square_footage": None,
         "valuation": _safe_float(raw_item.get("estimated_job_costs")),
         "raw_scope_of_work": (
@@ -115,7 +121,12 @@ def map_austin_to_schema(raw_item: dict) -> dict:
         "owner_name": None,  # Austin redacts primary owners from this endpoint due to privacy laws
         "contractor_name": raw_item.get("contractor_company_name") or raw_item.get("contractor_name"),
         "permit_type_raw": raw_item.get("work_class") or "UNKNOWN",
-        "permit_type_normalized": raw_item.get("permit_class_mapped") or "Other",
+        # permit_class_mapped is Austin's own Residential/Commercial split --
+        # a different axis (property class, not work type) from what this
+        # column means everywhere else, so it can't be passed through
+        # directly. work_class (e.g. "New", "Remodel", "Demolition") is the
+        # actual construction-type signal.
+        "permit_type_normalized": normalize_permit_type(raw_item.get("work_class"), raw_item.get("permit_class_mapped")),
         "square_footage": _safe_float(raw_item.get("total_job_sq_ft")),
         "valuation": _safe_float(raw_item.get("total_valuation_remit")),
         "raw_scope_of_work": raw_scope,

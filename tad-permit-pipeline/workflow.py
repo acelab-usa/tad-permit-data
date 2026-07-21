@@ -5,6 +5,7 @@ from hatchet_sdk import Hatchet, Context
 import llm_processor
 import database
 from logging_setup import get_logger
+from permit_types import normalize_permit_type
 
 logger = get_logger("workflow")
 
@@ -121,7 +122,7 @@ def parse_ledger_page(input: PageIngestionInput, ctx: Context) -> dict:
                     input.source_pdf_name, # Track which monthly file this came from
                     permit.filing_date,
                     permit.permit_type_raw,
-                    permit.permit_type_normalized,
+                    normalize_permit_type(permit.permit_type_raw),
                     permit.address,
                     permit.owner_name,
                     permit.contractor_name,

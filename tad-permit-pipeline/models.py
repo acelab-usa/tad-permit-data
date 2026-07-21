@@ -14,7 +14,6 @@ class SinglePermitExtract(BaseModel):
     permit_id: str = Field(description="The unique permit tracking or application number.")
     filing_date: Optional[str] = Field(default=None, description="The date filed or issued (YYYY-MM-DD).")
     permit_type_raw: Optional[str] = Field(default=None, description="The exact type of permit as written.")
-    permit_type_normalized: Optional[str] = Field(default=None, description="Normalized category.")
     address: Optional[str] = Field(default=None, description="The full property address.")
     owner_name: Optional[str] = Field(default=None, description="The property owner's name.")
     contractor_name: Optional[str] = Field(default=None, description="The builder or general contractor.")

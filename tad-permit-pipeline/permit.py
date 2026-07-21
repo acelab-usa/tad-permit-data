@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from datetime import date
 
+from permit_types import PERMIT_TYPE_TAXONOMY, PermitTypeNormalized
+
 class PermitSchemaV2(BaseModel):
     # --- Metadata & Source Details ---
     permit_id: str = Field(description="Unique identifier of the permit from the source.")
@@ -16,8 +18,9 @@ class PermitSchemaV2(BaseModel):
     
     # --- Taxonomy & Valuation ---
     permit_type_raw: str = Field(description="The original classification given by the city.")
-    permit_type_normalized: str = Field(
-        description="Standardized type: New Construction, Alteration, Demolition, Electrical, Plumbing, or Other"
+    permit_type_normalized: PermitTypeNormalized = Field(
+        description=f"Standardized category, one of: {', '.join(PERMIT_TYPE_TAXONOMY)}. "
+                    "Always derived via permit_types.normalize_permit_type(), never set directly."
     )
     square_footage: int | None = Field(default=None, description="Reported area in sq ft, null if missing.")
     valuation: float | None = Field(default=None, description="Reported cost/valuation of the job, null if missing.")
