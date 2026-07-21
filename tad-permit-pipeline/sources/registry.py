@@ -95,6 +95,35 @@ def map_nyc_to_schema(raw_item: dict) -> dict:
     }
 
 
+def map_austin_to_schema(raw_item: dict) -> dict:
+    """Maps raw Austin API payload to our unified PermitSchemaV2."""
+    parsed_date = _safe_date(raw_item.get("issue_date"))
+
+    raw_scope = (
+        raw_item.get("description")
+        or raw_item.get("project_name")
+        or "No description provided."
+    )
+
+    return {
+        "permit_id": raw_item.get("permit_number"),
+        "jurisdiction": "austin",
+        "source_url": "https://data.austintexas.gov/resource/3syk-w9eu.json",
+        "source_format": "API",
+        "address": (raw_item.get("original_address_1") or "").strip() or "UNKNOWN",
+        "filing_date": parsed_date,
+        "owner_name": None,  # Austin redacts primary owners from this endpoint due to privacy laws
+        "contractor_name": raw_item.get("contractor_company_name") or raw_item.get("contractor_name"),
+        "permit_type_raw": raw_item.get("work_class") or "UNKNOWN",
+        "permit_type_normalized": raw_item.get("permit_class_mapped") or "Other",
+        "square_footage": _safe_float(raw_item.get("total_job_sq_ft")),
+        "valuation": _safe_float(raw_item.get("total_valuation_remit")),
+        "raw_scope_of_work": raw_scope,
+        "scope_summary": raw_scope[:150],
+        "building_systems": [],
+    }
+
+
 SOURCES = {
     "chicago": SocrataAPISource(
         name="chicago",
@@ -109,6 +138,12 @@ SOURCES = {
         mapper_func=map_nyc_to_schema,
         skip_sentinel_field="permit_id",
         skip_sentinel_value="Permit is no",
+    ),
+    "austin": SocrataAPISource(
+        name="austin",
+        url="https://data.austintexas.gov/api/v3/views/3syk-w9eu/query.json",
+        date_column="issue_date",
+        mapper_func=map_austin_to_schema,
     ),
     "allen": PDFLedgerSource(
         name="allen",
