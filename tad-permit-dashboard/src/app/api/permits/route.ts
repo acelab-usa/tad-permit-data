@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { withDb } from "@/lib/db";
 import type { Permit } from "@/lib/types";
 
-// better-sqlite3 is a native addon -- requires the Node.js runtime, not edge.
 export const runtime = "nodejs";
 // Always read the current state of permits.db; never cache this response.
 export const dynamic = "force-dynamic";
@@ -14,8 +13,15 @@ export const dynamic = "force-dynamic";
 // keeps client-side filtering instant with no round-trip per filter change.
 export async function GET() {
   try {
-    const db = getDb();
-    const rows = db.prepare("SELECT * FROM permits").all() as Permit[];
+    const rows = await withDb((db) => {
+      const stmt = db.prepare("SELECT * FROM permits");
+      const results: Permit[] = [];
+      while (stmt.step()) {
+        results.push(stmt.getAsObject() as unknown as Permit);
+      }
+      stmt.free();
+      return results;
+    });
     return NextResponse.json({ permits: rows });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

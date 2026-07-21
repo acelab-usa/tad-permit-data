@@ -5,9 +5,18 @@ Read-only lookup UI for the unified permits table produced by the
 replaces the earlier Streamlit dashboard -- same filters/table/detail-view
 functionality, now as a Next.js app.
 
-It reads `permits.db` directly (via `better-sqlite3`) -- there's no separate
-API server, and no changes to ingestion, enrichment, or normalization, which
-all still live in the Python project.
+It reads `permits.db` directly (via `sql.js`, a pure-WASM SQLite build) --
+there's no separate API server, and no changes to ingestion, enrichment, or
+normalization, which all still live in the Python project.
+
+`sql.js` was chosen deliberately over `better-sqlite3`: the latter is a
+native addon requiring a per-machine compiled binary, which segfaulted
+outright on at least one contributor's machine (a broken local
+node-gyp/toolchain setup, unrelated to this app's code) -- `sql.js` needs no
+native compilation at all, so that whole class of "works on my machine"
+failure can't recur. The tradeoff is it loads the whole file into memory per
+read rather than holding an open file handle; irrelevant at this table's
+size (a few hundred KB).
 
 ## Setup
 
@@ -37,7 +46,10 @@ created and populated (`uv run python dataloader.py <jurisdiction>` in
 
 ## Architecture
 
-- `src/lib/db.ts` -- opens `permits.db` read-only via `better-sqlite3`.
+- `src/lib/db.ts` -- reads `permits.db` into memory and opens it via `sql.js`
+  (pure WASM, no native compilation). Re-reads the file on every call rather
+  than holding a persistent connection, so it always reflects the current
+  state of the file with no manual cache invalidation needed.
 - `src/app/api/permits/route.ts` -- one route, returns the whole `permits`
   table as JSON. The table is a few hundred rows, so this loads once and
   filters happen client-side (same approach the Streamlit version used with
