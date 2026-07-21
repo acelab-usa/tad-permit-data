@@ -1,0 +1,7 @@
+{
+  "name": "hvac_electrical_drywall",
+  "source": "synthetic",
+  "raw_description": "Installation of new rooftop HVAC units, electrical service upgrade to 400A, and replacement of existing drywall partitions on the second floor.",
+  "expected_building_systems": ["HVAC", "Electrical", "Drywall"],
+  "expected_summary_keywords": ["HVAC", "electrical", "drywall"]
+}

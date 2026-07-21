@@ -21,3 +21,6 @@ Thumbs.db
 # Logs
 pipeline.log
 pipeline.log.*
+
+# Eval harness reports (regenerated per run)
+eval/results/

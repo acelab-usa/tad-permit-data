@@ -1,0 +1,7 @@
+{
+  "name": "real_allen_fiber_telecom",
+  "source": "Allen - April 2026.pdf, page 2, permit 001080-2026-CO",
+  "raw_description": "space will be used as an office space. Meto Pole Setting is a prime contractor for att as well as other fiber placement companies. Metro has been in business for over 50 years. we install fiber optics as well as install telephone poles and aerial cable. no material will be stored at this location nor will there be any big machinery onsite, this space will solely be used for day to day office operations",
+  "expected_building_systems": ["Fiber Optics"],
+  "expected_summary_keywords": ["office", "fiber"]
+}

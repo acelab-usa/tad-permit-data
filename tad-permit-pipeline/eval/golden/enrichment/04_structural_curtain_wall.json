@@ -1,0 +1,7 @@
+{
+  "name": "structural_curtain_wall",
+  "source": "synthetic",
+  "raw_description": "Structural steel framing for new mezzanine level, plus curtain wall glazing on the north facade of the office building.",
+  "expected_building_systems": ["Structural Steel", "Curtain Wall"],
+  "expected_summary_keywords": ["structural", "mezzanine", "curtain wall"]
+}

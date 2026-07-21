@@ -21,6 +21,7 @@ The pipeline is intentionally decoupled into separate layers to maintain high co
 * **`workflow.py`**: The **Hatchet Worker Layer**. Listens for workflow events and manages concurrent, resilient data enrichment and database writes.
 * **`dashboard.py`**: The **Lookup UI Layer**. A read-only Streamlit app for searching/filtering the unified `permits` table.
 * **`logging_setup.py`**: Shared logging config (console + rotating `pipeline.log` file) used by every module above instead of ad-hoc `print()` calls.
+* **`eval/`**: The **Quality Eval Layer**. Scores `llm_processor.py`'s live output against hand-labeled golden cases to catch extraction/enrichment quality regressions. See `eval/README.md`.
 
 ---
 
@@ -132,4 +133,11 @@ Launch the read-only lookup dashboard to filter permits by jurisdiction, type, d
 
 ```bash
 uv run streamlit run dashboard.py
+```
+
+### Step 4: Evaluate Extraction Quality
+Run the LLM eval harness against a golden set of hand-labeled cases (including real Allen ledger pages) to catch quality regressions from prompt or model changes — see `eval/README.md` for details:
+
+```bash
+uv run python -m eval.harness
 ```

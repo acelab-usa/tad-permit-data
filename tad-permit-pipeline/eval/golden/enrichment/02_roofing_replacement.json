@@ -1,0 +1,7 @@
+{
+  "name": "roofing_replacement",
+  "source": "synthetic",
+  "raw_description": "Replace existing asphalt shingle roof with standing seam metal roofing system on single-family residence.",
+  "expected_building_systems": ["Roofing"],
+  "expected_summary_keywords": ["roof"]
+}
