@@ -1,0 +1,7 @@
+{
+  "name": "no_systems_should_not_hallucinate",
+  "source": "synthetic",
+  "raw_description": "General maintenance and repair as needed. No structural changes, no new construction.",
+  "expected_building_systems": [],
+  "expected_summary_keywords": ["maintenance"]
+}

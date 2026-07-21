@@ -32,7 +32,12 @@ if not api_key:
 
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
-    api_key=api_key,
+    # The SDK raises at construction time if api_key is falsy, which would
+    # crash this module on import for anyone who hasn't configured a key yet
+    # (including any code that just wants to import PermitEnrichmentSchema
+    # helpers without calling the API). Fall back to a placeholder so the
+    # failure surfaces at call time instead, where it's caught and logged.
+    api_key=api_key or "unset",
 )
 
 

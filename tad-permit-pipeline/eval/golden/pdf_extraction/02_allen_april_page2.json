@@ -1,0 +1,27 @@
+{
+  "name": "allen_april_page2",
+  "source": "Allen - April 2026.pdf, page 2 (includes a real duplicate permit_id line-item, 000837-2026-CO)",
+  "page_text": "                 BUILDING PERMITS ISSUED BY TYPE/WORK CLASS (4/01/2026 TO 4/30/2026)\n\n\n Permit #         Permit Type - Work Class                 Site Address                    Permit Status         Issue        Expiration     General Contractor\n                                                                     Parcel #                                                  Date         Date\n                                                                      Subdivision                            Sq Ft       Valuation     Fee Total\n\n  000540-2026-CO    Certificate of Occupancy - C/O Stand      1201 E Main St, 130                          Certificate of           4/1/2026      9/7/2026\n                   Alone                                            Allen, TX 75002                      Occupancy\n     Tenant:  Vinay Vishwanath\n                                                         111449\n    Owner: Gene Cason\n                                                  ALLEN HEIGHTS SHOPPING CENTER\n     Applicant:  Vinay Vishwanath                                                                                 1,500     $2,000.00       $125.00\n\n     Description:  Retail smoke shop selling tobacco products, cigars, cigarettes, vape devices, e-liquids, and related accessories. No on-site consumption or lounge area. No manufacturing or\n                 food service. Customer retail sales only.\n\n  000837-2026-CO    Certificate of Occupancy - C/O Stand      817 S Greenville Ave, 110 1               Permit Issued          4/1/2026     9/28/2026\n                   Alone                                            Allen, TX 75002\n     Tenant:  Kevin Hooks\n                                                         111860\n    Owner:  Matt Pope\n                                            MARK VII EQUIPMENT OF TEXAS, INC.\n     Applicant:  Kevin Hooks                                                                                      7,000    $48,000.00       $125.00\n\n     Description: Warehouse with small office.\n\n  000837-2026-CO    Certificate of Occupancy - C/O Stand      817 S Greenville Ave, 110 1               Permit Issued          4/1/2026     9/28/2026\n                   Alone                                            Allen, TX 75002\n     Tenant:  Kevin Hooks\n                                                         111860\n    Owner:  Kevin Hooks\n                                            MARK VII EQUIPMENT OF TEXAS, INC.\n     Applicant:  Kevin Hooks                                                                                      7,000    $48,000.00       $125.00\n\n     Description: Warehouse with small office.\n\n  000903-2026-CO    Certificate of Occupancy - C/O Stand      817 S Greenville Ave, 100 1               Permit Issued          4/1/2026     9/28/2026\n                   Alone                                            Allen, TX 75002\n     Tenant: Anna Hooks\n                                                         111860\n    Owner:  Matt Pope\n     Applicant:  Kevin Hooks                                                                                      7,000 $1,000,000.00       $125.00\n\n     Description:  Office building with light manufacturing and warehouse\n\n  001080-2026-CO    Certificate of Occupancy - C/O Stand      705 N Greenville Ave, 100                   Certificate of           4/1/2026      9/8/2026\n                   Alone                                            Allen, TX 75002                      Occupancy\n     Tenant:  Tina Gilcrease\n                                                         106424\n    Owner:  Steve Gilcrease\n     Applicant:  Tina Gilcrease                                                                                    1,500    $25,000.00       $125.00\n\n     Description: space will be used as an office space. Meto Pole Setting is a prime contractor for att as well as other fiber placement companies. Metro has been in business for over 50\n                  years. we install fiber optics as well as install telephone poles and aerial cable. no material will be stored at this location nor will there be any big machinery onsite, this\n               space will solely be used for day to day office operations\n\n\n\n\nMay 19, 2026                                                          305 Century Parkway, Allen, Texas 75013                                                    Page 2 of 96",
+  "expected_permits": [
+    {
+      "permit_id": "000540-2026-CO",
+      "address": "1201 E Main St",
+      "valuation": 2000.0
+    },
+    {
+      "permit_id": "000837-2026-CO",
+      "address": "817 S Greenville Ave",
+      "valuation": 48000.0
+    },
+    {
+      "permit_id": "000903-2026-CO",
+      "address": "817 S Greenville Ave",
+      "valuation": 1000000.0
+    },
+    {
+      "permit_id": "001080-2026-CO",
+      "address": "705 N Greenville Ave",
+      "valuation": 25000.0
+    }
+  ]
+}

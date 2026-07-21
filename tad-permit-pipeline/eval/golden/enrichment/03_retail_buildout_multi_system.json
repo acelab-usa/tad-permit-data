@@ -1,0 +1,7 @@
+{
+  "name": "retail_buildout_multi_system",
+  "source": "synthetic",
+  "raw_description": "Tenant build-out for retail space including new plumbing fixtures for restroom, LED lighting retrofit, and installation of a fire sprinkler system.",
+  "expected_building_systems": ["Plumbing", "Lighting", "Fire Sprinkler"],
+  "expected_summary_keywords": ["retail", "plumbing", "sprinkler"]
+}
