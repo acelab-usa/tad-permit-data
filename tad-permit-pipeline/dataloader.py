@@ -116,41 +116,16 @@ def _ingest_pdf_source(source: PDFPermitSource, size: int):
 def load_data(jurisdiction: str = "chicago", size: int = 100):
     database.init_db()
 
-    # Structured API Data Handling
-    if city in CITY_CONFIGS:
-        config = CITY_CONFIGS[city]
-        
-        # 1. Fetch live data
-        raw_records = fetch_permits(url=config["url"], date_column=config["date_column"], limit=size, page=1)
-        mapper_func = map_chicago_to_schema if city == "chicago" else map_nyc_to_schema
+    try:
+        source = get_source(jurisdiction)
+    except ValueError as e:
+        logger.error(str(e))
+        return
 
-        # 2. Loop through and process records
-        for raw_item in raw_records:
-            try:
-                # Validate and create the Pydantic object
-                validated_permit = PermitSchemaV2(**mapper_func(raw_item))
-
-                if city == "nyc" and validated_permit.permit_id == NYC_NO_PERMIT:
-                    print(f"  ⚠️ ({city}) Skipping: {validated_permit.permit_id}")
-                    continue
-
-                # 3. Pass the Pydantic object directly to the database!
-                inserted = database.insert_permit(validated_permit)
-                if inserted:
-                    print(f"  🎉 ({city}) Saved: Permit {validated_permit.permit_id} ({validated_permit.address})")
-                    
-                    hatchet.event.push(
-                        "permit:enrich",
-                        {"permit_id": validated_permit.permit_id, "raw_text": validated_permit.raw_scope_of_work}
-                    )
-
-                else:
-                    print(f"  ⚠️ ({city}) Skipped: Permit {validated_permit.permit_id} already exists.")
-                    
-            except Exception as e:
-                print(f"Failed to parse a record: {e}")
-    
-    # Default to Local PDF Ingestion
+    if isinstance(source, APIPermitSource):
+        _ingest_api_source(source, size)
+    elif isinstance(source, PDFPermitSource):
+        _ingest_pdf_source(source, size)
     else:
         logger.error("%s: adapter is neither an APIPermitSource nor a PDFPermitSource", jurisdiction)
 
@@ -168,15 +143,6 @@ def _parse_args():
 
 
 if __name__ == "__main__":
-    # # Test loading Chicago data
-    # print("--- INGESTING CHICAGO DATA ---")
-    # load_data("chicago", size=100)
-    
-    
-    # # Test loading NYC data
-    # print("\n--- INGESTING NYC DATA ---")
-    # load_data("nyc", size=100)
-    
-    # Test loading Allen data
-    print("\n--- INGESTING ALLEN DATA ---")
-    load_data("allen", size=100)
+    args = _parse_args()
+    logger.info("Starting ingestion: jurisdiction=%s size=%s", args.jurisdiction, args.size)
+    load_data(args.jurisdiction, size=args.size)
