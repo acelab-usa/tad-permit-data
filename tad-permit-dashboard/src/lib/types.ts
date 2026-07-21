@@ -16,6 +16,8 @@ export interface Permit {
   contractor_name: string | null;
   valuation: number | null;
   square_footage: number | null;
+  latitude: number | null;
+  longitude: number | null;
   raw_scope_of_work: string | null;
   scope_summary: string | null;
   building_systems: string | null; // JSON-encoded string[], parse with parseBuildingSystems()

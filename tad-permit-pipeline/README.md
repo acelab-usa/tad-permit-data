@@ -23,6 +23,7 @@ The pipeline is intentionally decoupled into separate layers to maintain high co
 * **`logging_setup.py`**: Shared logging config (console + rotating `pipeline.log` file) used by every module above instead of ad-hoc `print()` calls.
 * **`eval/`**: The **Quality Eval Layer**. Scores `llm_processor.py`'s live output against hand-labeled golden cases to catch extraction/enrichment quality regressions. See `eval/README.md`.
 * **`permit_types.py`**: The **Taxonomy Layer**. One fixed set of permit-type categories (`New Construction`, `Alteration`, `Demolition`, etc.) and a `normalize_permit_type()` keyword matcher every source maps into — this is what makes `permit_type_normalized` actually comparable/filterable across jurisdictions instead of each source inventing its own values.
+* **`geo.py`**: The **Coordinate Extraction Layer**. Best-effort `latitude`/`longitude` extraction from a source's raw API payload, tolerant of the handful of shapes Socrata datasets use for point geometry. API sources only — PDF ledgers have no coordinate data to extract.
 
 ---
 
@@ -73,6 +74,7 @@ The incoming datasets are normalized into a single database table (`permits`). F
 | `contractor_name` | `TEXT` | Registered corporate name of the designated builder. |
 | `valuation` | `REAL` | Total calculated financial assessment/cost estimation. |
 | `square_footage` | `REAL` | Total interior physical tracking context. |
+| `latitude` / `longitude` | `REAL` | Site coordinates, if the source provided them (see `geo.py`). API sources only -- Allen (PDF) never has these, and rows ingested before this column existed are `NULL` until re-ingested. |
 | `raw_scope_of_work` | `TEXT` | Unaltered original textual transcription profile of intended task. |
 | `scope_summary` | `TEXT` | High-level, LLM-generated summary of the `raw_scope_of_work`. |
 | `building_systems` | `TEXT` | A serialized JSON array string listing all construction systems or materials mentioned. |
