@@ -81,7 +81,7 @@ def map_nyc_to_schema(raw_item: dict) -> dict:
         "source_format": "API",
         "address": full_address or "UNKNOWN",
         "filing_date": parsed_date,
-        "owner_name": raw_item.get("owner_s_business_name"),
+        "owner_name": raw_item.get("owner_name"),
         "contractor_name": raw_item.get("licensee_s_business_name"),
         # work_type carries the actual construction category (e.g. "Plumbing",
         # "Mechanical"); filing_reason is permit lifecycle status (e.g.
@@ -116,7 +116,7 @@ def map_austin_to_schema(raw_item: dict) -> dict:
         "jurisdiction": "austin",
         "source_url": "https://data.austintexas.gov/resource/3syk-w9eu.json",
         "source_format": "API",
-        "address": (raw_item.get("original_address_1") or "").strip() or "UNKNOWN",
+        "address": (raw_item.get("original_address1") or "").strip() or "UNKNOWN",
         "filing_date": parsed_date,
         "owner_name": None,  # Austin redacts primary owners from this endpoint due to privacy laws
         "contractor_name": raw_item.get("contractor_company_name") or raw_item.get("contractor_name"),
@@ -127,8 +127,8 @@ def map_austin_to_schema(raw_item: dict) -> dict:
         # directly. work_class (e.g. "New", "Remodel", "Demolition") is the
         # actual construction-type signal.
         "permit_type_normalized": normalize_permit_type(raw_item.get("work_class"), raw_item.get("permit_class_mapped")),
-        "square_footage": _safe_float(raw_item.get("total_job_sq_ft")),
-        "valuation": _safe_float(raw_item.get("total_valuation_remit")),
+        "square_footage": _safe_float(raw_item.get("total_lot_sq_ft")),
+        "valuation": _safe_float(raw_item.get("total_job_valuation")),
         "raw_scope_of_work": raw_scope,
         "scope_summary": raw_scope[:150],
         "building_systems": [],
