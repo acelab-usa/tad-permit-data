@@ -19,7 +19,7 @@ The pipeline is intentionally decoupled into separate layers to maintain high co
 * **`llm_processor.py`**: The **AI Engine Layer**. Manages structured inference requests to OpenRouter models (such as Gemini 2.5 Flash), with retry/backoff on transient failures.
 * **`dataloader.py`**: The **Ingestion Orchestrator**. Looks up the requested jurisdiction's adapter, fetches/maps records, and pushes events to the background workflow.
 * **`workflow.py`**: The **Hatchet Worker Layer**. Listens for workflow events and manages concurrent, resilient data enrichment and database writes.
-* **`dashboard.py`**: The **Lookup UI Layer**. A read-only Streamlit app for searching/filtering the unified `permits` table.
+* **`../tad-permit-dashboard/`** (sibling project): The **Lookup UI Layer**. A read-only Next.js app for searching/filtering the unified `permits` table -- reads `permits.db` directly, no separate API server. See its own README for setup.
 * **`logging_setup.py`**: Shared logging config (console + rotating `pipeline.log` file) used by every module above instead of ad-hoc `print()` calls.
 * **`eval/`**: The **Quality Eval Layer**. Scores `llm_processor.py`'s live output against hand-labeled golden cases to catch extraction/enrichment quality regressions. See `eval/README.md`.
 * **`permit_types.py`**: The **Taxonomy Layer**. One fixed set of permit-type categories (`New Construction`, `Alteration`, `Demolition`, etc.) and a `normalize_permit_type()` keyword matcher every source maps into — this is what makes `permit_type_normalized` actually comparable/filterable across jurisdictions instead of each source inventing its own values.
@@ -87,7 +87,7 @@ The incoming datasets are normalized into a single database table (`permits`). F
 Ensure you have Python 3.10+ and the **`uv`** package manager installed.
 
 ### 2. Install Project Dependencies
-This project's dependencies (including `streamlit`/`pandas` for the lookup dashboard) are declared in `pyproject.toml`. Install them with:
+This project's dependencies are declared in `pyproject.toml`. Install them with:
 
 ```bash
 uv sync
@@ -128,10 +128,12 @@ uv run python dataloader.py allen --size 100   # PDF ledger ingestion
 Ingestion failures (bad records, DB conflicts, an unreachable API, an offline worker) are logged to the console and to `pipeline.log` and skip only the affected record — they don't stop the batch.
 
 ### Step 3: Browse & Search Permits
-Launch the read-only lookup dashboard to filter permits by jurisdiction, type, date range, valuation, or free-text search:
+The lookup dashboard lives in the sibling `tad-permit-dashboard/` Next.js project (reads `permits.db` directly, no ingestion changes needed). See `../tad-permit-dashboard/README.md`, or briefly:
 
 ```bash
-uv run streamlit run dashboard.py
+cd ../tad-permit-dashboard
+npm install
+npm run dev
 ```
 
 ### Step 4: Evaluate Extraction Quality
