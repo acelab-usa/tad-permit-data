@@ -53,7 +53,7 @@ Then run it the same way as any other jurisdiction: `uv run python dataloader.py
 
 ## 📊 Unified Database Schema
 
-The incoming datasets are normalized into a single database table (`building_permits`). Field mappings accommodate differences between cities.
+The incoming datasets are normalized into a single database table (`permits`). Field mappings accommodate differences between cities.
 
 ### Target Layout Blueprint
 
@@ -94,7 +94,7 @@ uv sync
 ```
 
 ### 3. Environment Keys Configuration
-Copy `.env.example` to `.env` in the project workspace and fill in your unique API credentials (note: the pipeline reads `OPEN_ROUTER_KEY`, not `OPENROUTER_API_KEY`):
+Set up environment variables and API credentials (note: the pipeline reads `OPEN_ROUTER_KEY`, not `OPENROUTER_API_KEY`):
 
 ```bash
 cp .env.example .env
@@ -105,8 +105,6 @@ SOCRATA_APP_TOKEN="your_actual_socrata_token_here"
 OPEN_ROUTER_KEY="your_actual_openrouter_token_here"
 HATCHET_CLIENT_TOKEN="your_actual_hatchet_token_here"
 ```
-
-`.env` is gitignored — never commit real credentials. If credentials were ever committed to this repo's history, rotate them; being in history means they're compromised even after removal.
 
 ## 🚀 Execution Guide
 This system uses a decoupled trigger-and-worker model. To run the full pipeline, you must operate two processes in separate terminal sessions:
