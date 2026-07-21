@@ -142,11 +142,3 @@ Run the LLM eval harness against a golden set of hand-labeled cases (including r
 ```bash
 uv run python -m eval.harness
 ```
-
-### Optional: Backfill Permit-Type Normalization
-If `permit_type_normalized`'s taxonomy in `permit_types.py` changes (a new keyword rule, a wider taxonomy), re-derive it for rows already in the database without re-running ingestion:
-
-```bash
-uv run python backfill_permit_types.py --dry-run   # preview the before/after distribution
-uv run python backfill_permit_types.py             # apply it
-```
