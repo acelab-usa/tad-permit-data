@@ -8,6 +8,13 @@ No per-city mapping function is needed -- the LLM extractor
 (`llm_processor.extract_multiple_permits_from_text`) reads each page and
 finds every permit listed on it, since ledger layouts vary too much
 page-to-page to hand-write a parser per city.
+
+If a city's ledger has quirks the generic extraction prompt won't know
+about on its own (a specific permit-number pattern, category names,
+formatting to ignore), pass `extraction_hints` -- see the `allen` entry in
+`sources/registry.py` for an example. Leave it unset for a new city until
+you've actually seen its output and know it needs tuning; a guessed hint
+for an unfamiliar format is as likely to hurt as help.
 """
 import os
 
@@ -19,9 +26,10 @@ logger = get_logger("sources.pdf_ledger")
 
 
 class PDFLedgerSource(PDFPermitSource):
-    def __init__(self, name: str, folder_path: str):
+    def __init__(self, name: str, folder_path: str, extraction_hints: str | None = None):
         self.name = name
         self.folder_path = folder_path
+        self.extraction_hints = extraction_hints
 
     def iter_pages(self, month_cap: int = 1, page_cap=None):
         if not os.path.exists(self.folder_path):

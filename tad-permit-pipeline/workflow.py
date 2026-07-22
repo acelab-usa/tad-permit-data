@@ -18,9 +18,11 @@ class EnrichInput(BaseModel):
 
 # Define input data for PDF processing
 class PageIngestionInput(BaseModel):
+    jurisdiction: str
     source_pdf_name: str
     page_number: int
     page_text: str
+    extraction_hints: str | None = None
 
 # Register the background workflow with Hatchet V1
 enrich_workflow = hatchet.workflow(
@@ -83,7 +85,9 @@ pdf_workflow = hatchet.workflow(
 def parse_ledger_page(input: PageIngestionInput, ctx: Context) -> dict:
     logger.info("Processing page %s from '%s'", input.page_number, input.source_pdf_name)
 
-    extracted_data = llm_processor.extract_multiple_permits_from_text(input.page_text)
+    extracted_data = llm_processor.extract_multiple_permits_from_text(
+        input.page_text, extraction_hints=input.extraction_hints
+    )
 
     if not extracted_data or not extracted_data.permits_found:
         logger.info("No permits found on page %s of '%s'", input.page_number, input.source_pdf_name)
@@ -116,9 +120,10 @@ def parse_ledger_page(input: PageIngestionInput, ctx: Context) -> dict:
                         permit_type_raw, permit_type_normalized, address, owner_name,
                         contractor_name, valuation, square_footage, raw_scope_of_work,
                         scope_summary, building_systems
-                    ) VALUES (?, 'allen', 'PDF', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, 'PDF', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     permit.permit_id,
+                    input.jurisdiction,
                     input.source_pdf_name, # Track which monthly file this came from
                     permit.filing_date,
                     permit.permit_type_raw,

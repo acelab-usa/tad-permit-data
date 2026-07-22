@@ -107,63 +107,65 @@ def enrich_permit_text(raw_description: str) -> PermitEnrichmentSchema | None:
         return None
 
 
-def extract_multiple_permits_from_text(chunk_text: str) -> MonthlyPDFPageExtractSchema | None:
+def extract_multiple_permits_from_text(
+    chunk_text: str, extraction_hints: str | None = None
+) -> MonthlyPDFPageExtractSchema | None:
     """
     Analyzes a chunk of text containing multiple permit listings and
     extracts them into a structured collection of individual permits.
+
+    `extraction_hints` is optional, source-specific guidance (e.g. a
+    jurisdiction's permit-number pattern, quirks to ignore, category names
+    it uses) -- see PDFLedgerSource.extraction_hints. Ledger layouts vary
+    too much across jurisdictions to bake one city's format into this
+    function directly, so a jurisdiction without hints just gets the
+    generic instructions below.
     """
     if not chunk_text or not chunk_text.strip():
         return None
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an expert data extraction assistant processing pages from a monthly municipal permit ledger. "
+                "Identify every single distinct permit listed in the text. "
+                "Return a JSON object containing a list named 'permits_found' matching this schema blueprint:\n"
+                "{\n"
+                "  'permits_found': [\n"
+                "    {\n"
+                "      'permit_id': 'string',\n"
+                "      'filing_date': 'YYYY-MM-DD',\n"
+                "      'permit_type_raw': 'string',\n"
+                "      'address': 'string',\n"
+                "      'owner_name': 'string',\n"
+                "      'contractor_name': 'string',\n"
+                "      'valuation': 0.0,\n"
+                "      'square_footage': 0.0,\n"
+                "      'raw_scope_of_work': 'verbatim description text from document',\n"
+                "      'scope_summary': '1 sentence summary',\n"
+                "      'building_systems': ['material1', 'material2']\n"
+                "    }\n"
+                "  ]\n"
+                "}"
+            ),
+        },
+    ]
+
+    if extraction_hints:
+        messages.append({"role": "system", "content": extraction_hints})
+
+    messages.append({
+        "role": "user",
+        "content": f"Raw Monthly Ledger Page Text:\n{chunk_text}",
+    })
 
     def _request():
         return client.chat.completions.create(
             model="google/gemini-2.5-flash",
             response_format={"type": "json_object"},
             max_tokens=4000,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an expert data extraction assistant processing pages from a monthly municipal permit ledger. "
-                        "Identify every single distinct permit listed in the text. "
-                        "Return a JSON object containing a list named 'permits_found' matching this schema blueprint:\n"
-                        "{\n"
-                        "  'permits_found': [\n"
-                        "    {\n"
-                        "      'permit_id': 'string',\n"
-                        "      'filing_date': 'YYYY-MM-DD',\n"
-                        "      'permit_type_raw': 'string',\n"
-                        "      'address': 'string',\n"
-                        "      'owner_name': 'string',\n"
-                        "      'contractor_name': 'string',\n"
-                        "      'valuation': 0.0,\n"
-                        "      'square_footage': 0.0,\n"
-                        "      'raw_scope_of_work': 'verbatim description text from document',\n"
-                        "      'scope_summary': '1 sentence summary',\n"
-                        "      'building_systems': ['material1', 'material2']\n"
-                        "    }\n"
-                        "  ]\n"
-                        "}"
-                    ),
-                },
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an expert data extraction engine parsing a municipal ledger page.\n"
-                        "CRITICAL BLOCK-IDENTIFICATION RULES:\n"
-                        "1. Every distinct permit entry begins at the far left with a unique alpha-numeric Permit Number pattern "
-                        "(e.g., '000397-2026-CO', '000808-2026-CO*', '007623-2025-CB*').\n"
-                        "2. IGNORE the text color of the permit number—it may be RED or DARK BLUE depending on the work class category.\n"
-                        "3. Extract all permit classifications on the page, including 'Commercial Building - Alteration', "
-                        "'Certificate of Occupancy - C/O Stand Alone', 'Commercial Misc', etc.\n"
-                        "4. Disregard lines containing summary metrics or 'SUBTOTALS'."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": f"Raw Monthly Ledger Page Text:\n{chunk_text}",
-                },
-            ],
+            messages=messages,
             temperature=0.1,
         )
 

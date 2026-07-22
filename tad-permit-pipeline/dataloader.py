@@ -98,9 +98,11 @@ def _ingest_pdf_source(source: PDFPermitSource, size: int):
             hatchet.event.push(
                 "pdf:process",
                 {
+                    "jurisdiction": source.name,
                     "source_pdf_name": filename,
                     "page_number": page_number,
                     "page_text": page_text,
+                    "extraction_hints": source.extraction_hints,
                 },
             )
             queued += 1

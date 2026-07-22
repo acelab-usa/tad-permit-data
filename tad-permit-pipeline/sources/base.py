@@ -33,6 +33,13 @@ class PDFPermitSource(PermitSource):
 
     source_format = "PDF"
 
+    # Optional, source-specific guidance passed to the LLM extractor (see
+    # llm_processor.extract_multiple_permits_from_text) -- a permit-number
+    # pattern to expect, quirks to ignore, category names it uses, etc.
+    # None means "use the generic extraction instructions only", which is
+    # the right default for a jurisdiction nobody's tuned a prompt for yet.
+    extraction_hints: str | None = None
+
     @abstractmethod
     def iter_pages(self, month_cap: int = 1, page_cap: int | None = None) -> Iterable[tuple[str, int, str]]:
         """Yield (source_file_name, page_number, page_text) tuples to enqueue."""
