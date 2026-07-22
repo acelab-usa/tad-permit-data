@@ -20,6 +20,19 @@ interface PermitsMapProps {
 const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795]; // continental US
 const DEFAULT_ZOOM = 4;
 
+// Leaflet's tile layer wraps horizontally by default -- panning far enough
+// east/west shows a repeated copy of the world's tiles. Markers exist at one
+// fixed lat/lng each and never get duplicated onto those extra copies,
+// which is what made pins seem to "disappear" when scrolled past a wrap
+// boundary. There's no reason this map needs infinite world panning, so
+// `noWrap` on the tile layer stops the repeated copies from rendering at
+// all, and `maxBounds` (a single world's worth, north/south included) stops
+// the user from dragging into the now-empty space beyond it.
+const WORLD_BOUNDS: [[number, number], [number, number]] = [
+  [-90, -180],
+  [90, 180],
+];
+
 // Leaflet measures its container's size once when the map is created and
 // has no way to know if that size changes afterward (a window resize, a
 // sidebar collapsing, a parent layout shift) unless something tells it to
@@ -160,11 +173,15 @@ export default function PermitsMap({ permits, jurisdictions, selectedId, onSelec
       center={DEFAULT_CENTER}
       zoom={DEFAULT_ZOOM}
       scrollWheelZoom
+      maxBounds={WORLD_BOUNDS}
+      maxBoundsViscosity={1.0}
+      minZoom={2}
       className="h-[32rem] w-full rounded-lg border border-gray-200 dark:border-gray-700"
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        noWrap
       />
       <SyncMapSize />
       <FitBounds permits={permits} />
