@@ -15,6 +15,8 @@ class PermitSchemaV2(BaseModel):
     filing_date: date | None = Field(default=None, description="The date the permit was filed/issued.")
     owner_name: str | None = Field(default=None, description="Property owner name, if available.")
     contractor_name: str | None = Field(default=None, description="Licensed contractor name, if available.")
+    latitude: float | None = Field(default=None, description="Site latitude, if the source provided one (see geo.py).")
+    longitude: float | None = Field(default=None, description="Site longitude, if the source provided one (see geo.py).")
     
     # --- Taxonomy & Valuation ---
     permit_type_raw: str = Field(description="The original classification given by the city.")

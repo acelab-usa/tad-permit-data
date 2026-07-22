@@ -7,10 +7,16 @@ it at a folder). Nothing else in the pipeline needs to change.
 from datetime import datetime
 from typing import Optional
 
+from geo import extract_lat_lon
 from logging_setup import get_logger
 from permit_types import normalize_permit_type
 from sources.pdf_ledger import PDFLedgerSource
 from sources.socrata import SocrataAPISource
+
+# Candidate point-geometry field names to check per dataset, in addition to
+# the plain latitude/longitude-ish fields geo.py always tries first. Not
+# verified against live API responses -- see geo.py's module docstring.
+_GEO_POINT_FIELDS = ("location", "geocoded_location", "the_geom")
 
 logger = get_logger("sources.registry")
 
@@ -46,6 +52,8 @@ def map_chicago_to_schema(raw_item: dict) -> dict:
         raw_item.get("suffix") or "",
     ]
 
+    latitude, longitude = extract_lat_lon(raw_item, point_fields=_GEO_POINT_FIELDS)
+
     return {
         "permit_id": raw_item.get("permit_"),
         "jurisdiction": "chicago",
@@ -55,6 +63,8 @@ def map_chicago_to_schema(raw_item: dict) -> dict:
         "filing_date": parsed_date,
         "owner_name": raw_item.get("contact_1_name"),
         "contractor_name": raw_item.get("contact_2_name"),
+        "latitude": latitude,
+        "longitude": longitude,
         "permit_type_raw": raw_item.get("permit_type", "UNKNOWN"),
         "permit_type_normalized": normalize_permit_type(raw_item.get("permit_type")),
         "square_footage": None,
@@ -74,6 +84,8 @@ def map_nyc_to_schema(raw_item: dict) -> dict:
     street_name = (raw_item.get("street_name") or "").strip()
     full_address = f"{house_num} {street_name}".strip()
 
+    latitude, longitude = extract_lat_lon(raw_item, point_fields=_GEO_POINT_FIELDS)
+
     return {
         "permit_id": raw_item.get("job_filing_number"),
         "jurisdiction": "nyc",
@@ -83,6 +95,8 @@ def map_nyc_to_schema(raw_item: dict) -> dict:
         "filing_date": parsed_date,
         "owner_name": raw_item.get("owner_name"),
         "contractor_name": raw_item.get("licensee_s_business_name"),
+        "latitude": latitude,
+        "longitude": longitude,
         # work_type carries the actual construction category (e.g. "Plumbing",
         # "Mechanical"); filing_reason is permit lifecycle status (e.g.
         # "Initial Permit", "Renewal Permit Without Changes") and is present
@@ -111,6 +125,8 @@ def map_austin_to_schema(raw_item: dict) -> dict:
         or "No description provided."
     )
 
+    latitude, longitude = extract_lat_lon(raw_item, point_fields=_GEO_POINT_FIELDS)
+
     return {
         "permit_id": raw_item.get("permit_number"),
         "jurisdiction": "austin",
@@ -120,6 +136,8 @@ def map_austin_to_schema(raw_item: dict) -> dict:
         "filing_date": parsed_date,
         "owner_name": None,  # Austin redacts primary owners from this endpoint due to privacy laws
         "contractor_name": raw_item.get("contractor_company_name") or raw_item.get("contractor_name"),
+        "latitude": latitude,
+        "longitude": longitude,
         "permit_type_raw": raw_item.get("work_class") or "UNKNOWN",
         # permit_class_mapped is Austin's own Residential/Commercial split --
         # a different axis (property class, not work type) from what this

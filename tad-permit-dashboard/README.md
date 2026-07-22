@@ -67,12 +67,38 @@ created and populated (`uv run python dataloader.py <jurisdiction>` in
   filters show every registered option -- including ones with zero ingested
   rows yet -- instead of only what's currently in the data.
 - `src/components/` -- `Filters`, `MetricsRow`, `PermitsTable`,
-  `PermitDetail`, plus a small reusable `CheckboxGroup`.
+  `PermitDetail`, `NavTabs`, plus a small reusable `CheckboxGroup`.
+- `src/lib/usePermits.ts` -- shared fetch/filter/options state, used by both
+  the table page (`/`) and the map page (`/map`) so they stay in sync
+  without duplicating the fetch-and-filter logic.
 
-## Not yet built
+## Map view (`/map`)
 
-An interactive map view (permit locations, hover tooltips, click-to-select)
-is planned as a follow-up once this lookup-table migration is done -- see
-the pipeline's README/commit history for context. `pydeck`'s Streamlit
-integration was prototyped for this but shelved in favor of the Next.js
-migration; the JS equivalent would be deck.gl or MapLibre GL.
+Plots permits with known coordinates using `react-leaflet` + OpenStreetMap
+tiles (free, no API key). Hover a point for a quick tooltip; click one to
+populate the same detail panel the table page uses. Colored by
+jurisdiction, using a palette assigned by sorted position rather than a
+hardcoded name -> color map, so a newly-registered jurisdiction just gets
+the next color automatically.
+
+**Coordinate coverage is partial and source-dependent:**
+- Chicago/NYC/Austin (API sources) capture `latitude`/`longitude` from their
+  Socrata payloads on ingestion -- see `tad-permit-pipeline/geo.py`. The
+  exact field names used weren't verified against live API responses (no
+  network access to those hosts in the environment this was built in), so
+  actual coverage may be lower than expected until confirmed against a real
+  ingestion run.
+- Allen (PDF ledger) permits have **no coordinate data at all** -- there's
+  nothing in a PDF ledger page to extract a lat/lon from.
+- Permits ingested *before* this feature existed have `NULL` coordinates
+  regardless of source, since the column didn't exist yet when they were
+  written. Re-run ingestion to backfill them.
+
+The map page shows a "N of M have no location data yet" count so this
+limitation is visible in the UI rather than silently dropping permits.
+
+`leaflet`'s marker uses SVG `CircleMarker`s rather than image-based
+markers specifically to avoid a well-known Leaflet+bundler gotcha (default
+marker icon assets not resolving correctly through Next.js's build) --
+there was no need to work around it since circles don't need icon images at
+all.
