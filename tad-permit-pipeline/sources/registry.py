@@ -188,6 +188,10 @@ SOURCES = {
             "4. Disregard lines containing summary metrics or 'SUBTOTALS'."
         ),
     ),
+    "naperville": PDFLedgerSource(
+        name="naperville",
+        folder_path="./naperville_pdfs"
+    ),
 }
 
 
