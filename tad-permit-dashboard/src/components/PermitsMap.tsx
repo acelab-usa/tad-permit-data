@@ -16,6 +16,31 @@ interface PermitsMapProps {
 const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795]; // continental US
 const DEFAULT_ZOOM = 4;
 
+// Leaflet measures its container's size once when the map is created and
+// has no way to know if that size changes afterward (a window resize, a
+// sidebar collapsing, a parent layout shift) unless something tells it to
+// recheck. Defensive measure, not specific to any bug found so far --
+// keeps the map correctly sized regardless of what else changes around it.
+function SyncMapSize() {
+  const map = useMap();
+
+  useEffect(() => {
+    const container = map.getContainer();
+    // Correct any stale initial measurement once layout has had a chance to settle.
+    const raf = requestAnimationFrame(() => map.invalidateSize());
+
+    const observer = new ResizeObserver(() => map.invalidateSize());
+    observer.observe(container);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+    };
+  }, [map]);
+
+  return null;
+}
+
 // Recenters/fits the map to the current point set whenever it changes
 // (a filter changed, or the underlying permit list refreshed).
 function FitBounds({ permits }: { permits: Permit[] }) {
@@ -53,6 +78,7 @@ export default function PermitsMap({ permits, jurisdictions, selectedId, onSelec
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      <SyncMapSize />
       <FitBounds permits={permits} />
       {permits.map((permit) => {
         const color = colorForJurisdiction(permit.jurisdiction, jurisdictions);
