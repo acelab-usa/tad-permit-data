@@ -98,6 +98,7 @@ JURISDICTION_LOCATIONS = {
     "chicago": "Chicago, IL",
     "nyc": "New York, NY",
     "austin": "Austin, TX",
+    "la": "Los Angeles, CA",
     "allen": "Allen, TX",
 }
 

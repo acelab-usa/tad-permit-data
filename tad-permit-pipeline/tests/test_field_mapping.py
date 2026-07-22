@@ -20,6 +20,7 @@ from sources.field_mapping import build_mapper
 from sources.registry import (
     AUSTIN_MAPPING,
     CHICAGO_MAPPING,
+    LA_MAPPING,
     NYC_MAPPING,
     SEATTLE_MAPPING,
     _GEO_POINT_FIELDS,
@@ -276,6 +277,66 @@ class SeattleMappingTests(unittest.TestCase):
         self.assertEqual(mapped["permit_type_normalized"], "Other")
         self.assertIsNone(mapped["valuation"])
         self.assertIsNone(mapped["filing_date"])
+
+
+class LaMappingTests(unittest.TestCase):
+    """LA is new (no prior implementation to diff against), so these check
+    the mapper against a real sample record instead
+    (data.lacity.org/resource/xnhu-aczu.json)."""
+
+    def test_real_sample_record(self):
+        raw_item = {
+            "pcis_permit": "18010-20000-03298",
+            "reference_old_permit": "18VN77515",
+            "latest_status": "CofO Issued",
+            "status_date": "2020-01-23T00:00:00.000",
+            "permit_type": "Bldg-New",
+            "permit_sub_type": "1 or 2 Family Dwelling",
+            "permit_category": "Plan Check",
+            "issue_date": "2018-09-26T00:00:00.000",
+            "address_start": "7806",
+            "address_end": "7806",
+            "street_direction": "N",
+            "street_name": "ARVILLA",
+            "street_suffix": "AVE",
+            "zip_code": "91352",
+            "work_description": (
+                "NEW 27.25' X 46.25'ACCESSORY DWELLING UNIT PER AB 494 & SB 229. ALL WO"
+            ),
+            "valuation": "121200",
+            "floor_area_l_a_zoning_code_definition": "1200",
+            "floor_area_l_a_building_code_definition": "1200",
+            "contractors_business_name": "OWNER-BUILDER",
+            "applicant_first_name": "LEVIK",
+        }
+        mapped = build_mapper(LA_MAPPING)(raw_item)
+
+        self.assertEqual(mapped["permit_id"], "18010-20000-03298")
+        self.assertEqual(mapped["jurisdiction"], "la")
+        self.assertEqual(mapped["address"], "7806 N ARVILLA AVE")
+        self.assertEqual(mapped["filing_date"].isoformat(), "2018-09-26")
+        self.assertIsNone(mapped["owner_name"])
+        self.assertEqual(mapped["contractor_name"], "OWNER-BUILDER")
+        self.assertEqual(mapped["square_footage"], 1200.0)
+        self.assertEqual(mapped["valuation"], 121200.0)
+        self.assertEqual(mapped["permit_type_raw"], "Bldg-New")
+        self.assertIn(mapped["permit_type_normalized"], PERMIT_TYPE_TAXONOMY)
+        self.assertEqual(mapped["permit_type_normalized"], "New Construction")
+        # No geometry field in this dataset at all -- coordinates come
+        # entirely from the geo.geocode_address() fallback, not extraction.
+        self.assertIsNone(mapped["latitude"])
+        self.assertIsNone(mapped["longitude"])
+        self.assertTrue(mapped["raw_scope_of_work"].startswith("NEW 27.25"))
+        self.assertLessEqual(len(mapped["scope_summary"]), 150)
+
+    def test_missing_optional_fields(self):
+        mapped = build_mapper(LA_MAPPING)({"pcis_permit": "X", "address_start": "1", "street_name": "MAIN"})
+        self.assertEqual(mapped["permit_type_raw"], "UNKNOWN")
+        self.assertEqual(mapped["permit_type_normalized"], "Other")
+        self.assertIsNone(mapped["valuation"])
+        self.assertIsNone(mapped["square_footage"])
+        self.assertIsNone(mapped["filing_date"])
+        self.assertEqual(mapped["address"], "1 MAIN")
 
 
 if __name__ == "__main__":

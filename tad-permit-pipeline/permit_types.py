@@ -9,10 +9,14 @@ jurisdictions in the dashboard -- a value that means something different
 per source defeats the point of the column.
 
 This is a keyword-based v1, not a lookup table per source: it's built from
-the actual raw values seen in Chicago, NYC, Austin, and the Allen PDF
+the actual raw values seen in Chicago, NYC, Austin, LA, and the Allen PDF
 ledgers, and it deliberately falls back to "Other" rather than guessing --
 a wrong bucket is worse for search/filtering than an honest "Other". Extend
-`_KEYWORD_RULES` as new raw values turn up that don't match anything yet.
+`_KEYWORD_RULES`/`_EXACT_MATCH_OVERRIDES` as new raw values turn up that
+don't match anything yet -- e.g. LA's other `Bldg-*` permit_type values
+(Alter/Repair, Demolition, etc.) are still unconfirmed and would need their
+own entries once seen in real ingested data, same as `bldg-new` was added
+here from one real sample record rather than guessed.
 """
 from typing import Literal, get_args
 
@@ -34,11 +38,13 @@ PERMIT_TYPE_TAXONOMY: tuple = get_args(PermitTypeNormalized)
 
 # A few source vocabularies use short, ambiguous-as-a-substring codes for an
 # otherwise-unambiguous category (e.g. Austin's work_class is literally
-# "New"). Checked as a whole-value equality match against each raw value
-# individually -- never as a substring -- so it can't false-positive the way
-# a bare "new" substring match would (e.g. inside "renew").
+# "New"; LA's permit_type is literally "Bldg-New"). Checked as a whole-value
+# equality match against each raw value individually -- never as a
+# substring -- so it can't false-positive the way a bare "new" substring
+# match would (e.g. inside "renew").
 _EXACT_MATCH_OVERRIDES = {
     "new": "New Construction",
+    "bldg-new": "New Construction",
 }
 
 # Ordered so more specific phrases are checked before more general ones

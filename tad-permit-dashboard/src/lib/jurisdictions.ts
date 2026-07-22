@@ -5,4 +5,4 @@
 // here too so it shows up in the filter even before it has any ingested
 // rows (matching the "registry-driven, not data-driven" fix made in
 // dashboard.py's Streamlit predecessor).
-export const REGISTERED_JURISDICTIONS = ["allen", "austin", "chicago", "nyc", "seattle"] as const;
+export const REGISTERED_JURISDICTIONS = ["allen", "austin", "chicago", "la", "naperville", "nyc", "seattle"] as const;

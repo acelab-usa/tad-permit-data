@@ -116,6 +116,33 @@ SEATTLE_MAPPING = FieldMapping(
 )
 
 
+# Added from a live sample (`data.lacity.org/resource/xnhu-aczu.json`), so
+# these field names are actually verified. Needs no custom mapper_func or
+# scope_builder. Two things this dataset genuinely lacks, rather than us
+# just not mapping them: no latitude/longitude or geometry field at all
+# (LA permits get coordinates entirely from the geocoding fallback -- see
+# the "la" entry in geo.JURISDICTION_LOCATIONS), and no complete owner-name
+# field -- only applicant_first_name, with no last name alongside it, too
+# incomplete to trust as owner_name.
+LA_MAPPING = FieldMapping(
+    jurisdiction="la",
+    source_url="https://data.lacity.org/resource/xnhu-aczu.json",
+    permit_id_field="pcis_permit",
+    address_fields=("address_start", "street_direction", "street_name", "street_suffix"),
+    date_fields=("issue_date",),
+    contractor_name_fields=("contractors_business_name",),
+    # permit_sub_type (e.g. "1 or 2 Family Dwelling") is occupancy, not
+    # construction type -- kept only as a secondary signal for the
+    # normalizer, same role Seattle's permitclass and Austin's
+    # permit_class_mapped play. permit_type (e.g. "Bldg-New") is the actual
+    # construction-type signal.
+    permit_type_fields=("permit_type", "permit_sub_type"),
+    valuation_field="valuation",
+    square_footage_field="floor_area_l_a_building_code_definition",
+    scope_fields=("work_description",),
+)
+
+
 SOURCES = {
     "chicago": SocrataAPISource(
         name="chicago",
@@ -142,6 +169,12 @@ SOURCES = {
         url="https://data.seattle.gov/api/v3/views/76t5-zqzr/query.json",
         date_column="issueddate",
         mapper_func=build_mapper(SEATTLE_MAPPING),
+    ),
+    "la": SocrataAPISource(
+        name="la",
+        url="https://data.lacity.org/api/v3/views/xnhu-aczu/query.json",
+        date_column="issue_date",
+        mapper_func=build_mapper(LA_MAPPING),
     ),
     "allen": PDFLedgerSource(
         name="allen",
