@@ -1,16 +1,22 @@
 """Generic adapter for Socrata (and Socrata-shaped JSON) permit APIs.
 
-Adding a new Socrata-backed city is just:
+Adding a new Socrata-backed city is usually just a declarative FieldMapping
+(see sources/field_mapping.py) plus this:
 
     SocrataAPISource(
         name="denver",
         url="https://data.denvergov.org/api/v3/views/xxxx/query.json",
         date_column="issued_date",
-        mapper_func=map_denver_to_schema,
+        mapper_func=build_mapper(DENVER_MAPPING),
     )
 
-`mapper_func` is the only per-city code you have to write -- a plain
-function that turns one raw JSON record into the dict PermitSchemaV2 needs.
+`mapper_func` is a plain function that turns one raw JSON record into the
+dict PermitSchemaV2 needs -- `build_mapper()` generates one from a
+FieldMapping for the common case. Fall back to hand-writing a `mapper_func`
+directly only if a city's payload needs logic a flat field-to-field mapping
+genuinely can't express (rare -- see NYC's `scope_builder` in
+sources/registry.py for the one existing case, which still uses
+FieldMapping/build_mapper for everything else).
 """
 import time
 from typing import Callable, Optional

@@ -87,10 +87,10 @@ def extract_lat_lon(raw_item: dict, point_fields: tuple = ()) -> tuple:
 
 # Fallback "home city" for jurisdictions whose raw address is just a bare
 # street line with no city/state at all -- e.g. Allen's PDF ledger
-# ("945 Stockton Dr, 4130 4") and Chicago/NYC/Austin's mappers, which all
-# build `address` purely from street-number/name fields (see
-# map_chicago_to_schema et al. above). This is only consulted as a second
-# attempt, when geocoding the address exactly as given doesn't resolve -- a
+# ("945 Stockton Dr, 4130 4") and Chicago/NYC/Austin's FieldMappings (see
+# sources/registry.py), which all build `address` purely from
+# street-number/name fields. This is only consulted as a second attempt,
+# when geocoding the address exactly as given doesn't resolve -- a
 # jurisdiction whose addresses already include city/state/zip (e.g. an API
 # source returning "1955 GLACIER PARK AV, NAPERVILLE, IL 60540") never needs
 # an entry here at all, so onboarding one doesn't require touching this dict.

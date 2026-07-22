@@ -31,16 +31,29 @@ The pipeline is intentionally decoupled into separate layers to maintain high co
 
 Nothing outside `sources/registry.py` needs to change to onboard a new city.
 
-**If it's a Socrata (or Socrata-shaped JSON) API**, add an entry using the generic adapter and a small mapper function that turns one raw record into the fields `PermitSchemaV2` expects:
+**If it's a Socrata (or Socrata-shaped JSON) API**, most cities need no custom code at all -- just a declarative `FieldMapping` (see `sources/field_mapping.py`) naming which raw field(s) hold each piece of `PermitSchemaV2` (a single field, or an ordered list of candidates to try in turn), and `build_mapper()` generates the actual mapper function from it:
 
 ```python
+DENVER_MAPPING = FieldMapping(
+    jurisdiction="denver",
+    source_url="https://data.denvergov.org/resource/xxxx.json",
+    permit_id_field="permit_number",
+    address_fields=("address",),  # already a complete address? use as-is
+    date_fields=("issue_date",),
+    permit_type_fields=("permit_class",),
+    valuation_field="valuation",
+    scope_fields=("description",),
+)
+
 "denver": SocrataAPISource(
     name="denver",
     url="https://data.denvergov.org/api/v3/views/xxxx/query.json",
     date_column="issued_date",
-    mapper_func=map_denver_to_schema,  # write this next to map_chicago_to_schema
+    mapper_func=build_mapper(DENVER_MAPPING),
 ),
 ```
+
+Only reach for a hand-written `mapper_func` (as Chicago/Austin used to have, and NYC still partly does via `scope_builder`) when a field genuinely needs logic a flat mapping can't express -- e.g. NYC's scope text is built from two labeled fields, not "pick one and truncate." See `sources/registry.py` for the real Chicago/NYC/Austin/Seattle configs, and `tests/test_field_mapping.py` for regression coverage confirming the generic mapper reproduces the pre-refactor behavior exactly.
 
 **If it's a monthly PDF ledger**, point the generic PDF adapter at a folder — no mapper needed, since the LLM reads each page and finds every permit listed on it:
 
