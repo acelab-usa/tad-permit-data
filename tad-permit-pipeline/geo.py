@@ -85,10 +85,15 @@ def extract_lat_lon(raw_item: dict, point_fields: tuple = ()) -> tuple:
     return None, None
 
 
-# One fixed "home city" per registered jurisdiction -- a permit's raw address
-# (e.g. "945 Stockton Dr, 4130 4") is usually missing city/state entirely,
-# but every permit from a given jurisdiction was filed in the same city, so
-# this is enough to disambiguate the address for the geocoder.
+# Fallback "home city" for jurisdictions whose raw address is just a bare
+# street line with no city/state at all -- e.g. Allen's PDF ledger
+# ("945 Stockton Dr, 4130 4") and Chicago/NYC/Austin's mappers, which all
+# build `address` purely from street-number/name fields (see
+# map_chicago_to_schema et al. above). This is only consulted as a second
+# attempt, when geocoding the address exactly as given doesn't resolve -- a
+# jurisdiction whose addresses already include city/state/zip (e.g. an API
+# source returning "1955 GLACIER PARK AV, NAPERVILLE, IL 60540") never needs
+# an entry here at all, so onboarding one doesn't require touching this dict.
 JURISDICTION_LOCATIONS = {
     "chicago": "Chicago, IL",
     "nyc": "New York, NY",
@@ -100,28 +105,7 @@ _CENSUS_GEOCODER_URL = "https://geocoding.geo.census.gov/geocoder/locations/onel
 _GEOCODE_TIMEOUT_SECONDS = 5
 
 
-def geocode_address(address: Optional[str], jurisdiction: str) -> tuple:
-    """Best-effort fallback: resolves a street address to (lat, lon) via the
-    US Census Bureau's free geocoder (no API key, US addresses only -- fine
-    since every registered jurisdiction is a US city).
-
-    For sources that never provide coordinates at all (PDF ledgers) or that
-    didn't for a particular record (a malformed/missing API geometry field),
-    this is the only way those permits end up with a map location. Returns
-    (None, None) on any failure -- bad/unmatched address, network error,
-    unrecognized jurisdiction -- so ingestion always continues without a
-    location rather than blocking on this.
-    """
-    if not address or not address.strip():
-        return None, None
-
-    city_state = JURISDICTION_LOCATIONS.get(jurisdiction.lower())
-    if not city_state:
-        logger.warning("geocode_address: no known city/state for jurisdiction '%s', skipping", jurisdiction)
-        return None, None
-
-    one_line = f"{address.strip()}, {city_state}"
-
+def _geocode_one_line(one_line: str) -> tuple:
     try:
         response = requests.get(
             _CENSUS_GEOCODER_URL,
@@ -135,10 +119,42 @@ def geocode_address(address: Optional[str], jurisdiction: str) -> tuple:
         return None, None
 
     if not matches:
-        logger.info("geocode_address: no match for '%s'", one_line)
         return None, None
 
     coords = matches[0].get("coordinates", {})
     # Census returns x=longitude, y=latitude.
     lat, lon = _to_float(coords.get("y")), _to_float(coords.get("x"))
     return (lat, lon) if _valid(lat, lon) else (None, None)
+
+
+def geocode_address(address: Optional[str], jurisdiction: str) -> tuple:
+    """Best-effort fallback: resolves a street address to (lat, lon) via the
+    US Census Bureau's free geocoder (no API key, US addresses only -- fine
+    since every registered jurisdiction is a US city).
+
+    For sources that never provide coordinates at all (PDF ledgers) or that
+    didn't for a particular record (a malformed/missing API geometry field),
+    this is the only way those permits end up with a map location. Returns
+    (None, None) on any failure -- bad/unmatched address, network error,
+    unrecognized jurisdiction -- so ingestion always continues without a
+    location rather than blocking on this.
+
+    Tries the address exactly as given first, since many sources already
+    include city/state/zip. Only if that doesn't resolve does it retry with
+    a fixed per-jurisdiction city/state appended, for sources (like Allen's
+    PDF ledger) whose raw address is missing that context entirely.
+    """
+    if not address or not address.strip():
+        return None, None
+
+    address = address.strip()
+
+    lat, lon = _geocode_one_line(address)
+    if lat is not None:
+        return lat, lon
+
+    city_state = JURISDICTION_LOCATIONS.get(jurisdiction.lower())
+    if not city_state:
+        return None, None
+
+    return _geocode_one_line(f"{address}, {city_state}")
