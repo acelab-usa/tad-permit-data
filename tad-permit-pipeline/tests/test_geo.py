@@ -12,11 +12,14 @@ disambiguate with.
 import unittest
 from unittest.mock import MagicMock, patch
 
+import requests
+
 import geo
 
 
-def _mock_response(matches):
+def _mock_response(matches, status_code=200):
     response = MagicMock()
+    response.status_code = status_code
     response.raise_for_status.return_value = None
     response.json.return_value = {"result": {"addressMatches": matches}}
     return response
@@ -78,6 +81,58 @@ class GeocodeAddressTests(unittest.TestCase):
         with patch("geo.requests.get") as mock_get:
             lat, lon = geo.geocode_address("", "la")
         mock_get.assert_not_called()
+        self.assertIsNone(lat)
+        self.assertIsNone(lon)
+
+
+class GeocodeRetryTests(unittest.TestCase):
+    """The Census geocoder is known to be slow/flaky under load -- these
+    lock down that a transient failure gets retried instead of silently
+    dropping an otherwise-good address on the first blip."""
+
+    def setUp(self):
+        # Don't actually sleep in tests.
+        self._sleep_patch = patch("geo.time.sleep")
+        self._sleep_patch.start()
+        self.addCleanup(self._sleep_patch.stop)
+
+    def test_retries_on_transient_error_then_succeeds(self):
+        responses = iter([
+            requests.exceptions.ConnectionError("boom"),
+            requests.exceptions.Timeout("slow"),
+            _mock_response(_MATCH),
+        ])
+
+        def fake_get(*args, **kwargs):
+            item = next(responses)
+            if isinstance(item, Exception):
+                raise item
+            return item
+
+        with patch("geo.requests.get", side_effect=fake_get) as mock_get:
+            lat, lon = geo.geocode_address("7806 N ARVILLA AVE", "la")
+
+        self.assertEqual(mock_get.call_count, 3)
+        self.assertAlmostEqual(lat, 41.8781)
+        self.assertAlmostEqual(lon, -87.6298)
+
+    def test_retries_on_retryable_status_code_then_succeeds(self):
+        responses = iter([
+            _mock_response([], status_code=503),
+            _mock_response(_MATCH, status_code=200),
+        ])
+
+        with patch("geo.requests.get", side_effect=lambda *a, **k: next(responses)) as mock_get:
+            lat, lon = geo.geocode_address("7806 N ARVILLA AVE", "la")
+
+        self.assertEqual(mock_get.call_count, 2)
+        self.assertAlmostEqual(lat, 41.8781)
+
+    def test_gives_up_after_max_retries(self):
+        with patch("geo.requests.get", side_effect=requests.exceptions.Timeout("slow")) as mock_get:
+            lat, lon = geo.geocode_address("7806 N ARVILLA AVE", "la")
+
+        self.assertEqual(mock_get.call_count, geo._GEOCODE_MAX_RETRIES)
         self.assertIsNone(lat)
         self.assertIsNone(lon)
 

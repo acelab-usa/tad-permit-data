@@ -128,7 +128,16 @@ LA_MAPPING = FieldMapping(
     jurisdiction="la",
     source_url="https://data.lacity.org/resource/xnhu-aczu.json",
     permit_id_field="pcis_permit",
-    address_fields=("address_start", "street_direction", "street_name", "street_suffix"),
+    # zip_code is included (unlike Chicago/NYC/Austin's address_fields,
+    # which have no zip field to draw from at all) since LA's addresses are
+    # otherwise disambiguated only by "Los Angeles, CA" -- a huge, dense
+    # city with many similarly-named streets across neighborhoods. Without
+    # zip, the geocode fallback had a real, observed failure mode: an
+    # unqualified-enough address occasionally matched a same-named street
+    # elsewhere in the country. The zip's position (after the street, before
+    # the appended "Los Angeles, CA") isn't standard USPS order -- worth
+    # confirming match-rate improvement against a real ingestion run.
+    address_fields=("address_start", "street_direction", "street_name", "street_suffix", "zip_code"),
     date_fields=("issue_date",),
     contractor_name_fields=("contractors_business_name",),
     # permit_sub_type (e.g. "1 or 2 Family Dwelling") is occupancy, not

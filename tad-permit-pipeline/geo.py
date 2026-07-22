@@ -16,6 +16,7 @@ passed in from sources/registry.py are a starting point, not a guarantee.
 If coordinate coverage looks low after a real ingestion run, check the
 actual raw API response for the real field name and add it there.
 """
+import time
 from typing import Optional
 
 import requests
@@ -104,21 +105,53 @@ JURISDICTION_LOCATIONS = {
 
 _CENSUS_GEOCODER_URL = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress"
 _GEOCODE_TIMEOUT_SECONDS = 5
+_GEOCODE_MAX_RETRIES = 3
+_GEOCODE_BACKOFF_SECONDS = 1
+_GEOCODE_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+
+def _fetch_matches_with_retry(one_line: str) -> Optional[list]:
+    """Requests `one_line`'s matches with retry/backoff on transient failures
+    (timeout, connection error, rate-limit/server-error status) -- the
+    public Census geocoder is known to be slow/flaky under load, and a
+    single attempt with no retry would silently drop an otherwise-good
+    address to a transient blip rather than a real non-match. Returns None
+    (not an empty list) if every attempt failed, so the caller can tell
+    "genuinely no match" apart from "couldn't even ask"."""
+    last_error = None
+
+    for attempt in range(1, _GEOCODE_MAX_RETRIES + 1):
+        try:
+            response = requests.get(
+                _CENSUS_GEOCODER_URL,
+                params={"address": one_line, "benchmark": "Public_AR_Current", "format": "json"},
+                timeout=_GEOCODE_TIMEOUT_SECONDS,
+            )
+            if response.status_code in _GEOCODE_RETRYABLE_STATUS_CODES:
+                raise requests.exceptions.HTTPError(f"HTTP {response.status_code}", response=response)
+
+            response.raise_for_status()
+            return response.json()["result"]["addressMatches"]
+
+        except (requests.RequestException, ValueError, KeyError) as e:
+            last_error = e
+            if attempt < _GEOCODE_MAX_RETRIES:
+                wait = _GEOCODE_BACKOFF_SECONDS * (2 ** (attempt - 1))
+                logger.warning(
+                    "geocode_address: lookup failed for '%s' (attempt %s/%s): %s, retrying in %ss",
+                    one_line, attempt, _GEOCODE_MAX_RETRIES, e, wait,
+                )
+                time.sleep(wait)
+
+    logger.warning(
+        "geocode_address: giving up on '%s' after %s attempts: %s",
+        one_line, _GEOCODE_MAX_RETRIES, last_error,
+    )
+    return None
 
 
 def _geocode_one_line(one_line: str) -> tuple:
-    try:
-        response = requests.get(
-            _CENSUS_GEOCODER_URL,
-            params={"address": one_line, "benchmark": "Public_AR_Current", "format": "json"},
-            timeout=_GEOCODE_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-        matches = response.json()["result"]["addressMatches"]
-    except (requests.RequestException, ValueError, KeyError) as e:
-        logger.warning("geocode_address: lookup failed for '%s': %s", one_line, e)
-        return None, None
-
+    matches = _fetch_matches_with_retry(one_line)
     if not matches:
         return None, None
 

@@ -313,7 +313,7 @@ class LaMappingTests(unittest.TestCase):
 
         self.assertEqual(mapped["permit_id"], "18010-20000-03298")
         self.assertEqual(mapped["jurisdiction"], "la")
-        self.assertEqual(mapped["address"], "7806 N ARVILLA AVE")
+        self.assertEqual(mapped["address"], "7806 N ARVILLA AVE 91352")
         self.assertEqual(mapped["filing_date"].isoformat(), "2018-09-26")
         self.assertIsNone(mapped["owner_name"])
         self.assertEqual(mapped["contractor_name"], "OWNER-BUILDER")
