@@ -140,22 +140,27 @@ def geocode_address(address: Optional[str], jurisdiction: str) -> tuple:
     unrecognized jurisdiction -- so ingestion always continues without a
     location rather than blocking on this.
 
-    Tries the address exactly as given first, since many sources already
-    include city/state/zip. Only if that doesn't resolve does it retry with
-    a fixed per-jurisdiction city/state appended, for sources (like Allen's
-    PDF ledger) whose raw address is missing that context entirely.
+    If this jurisdiction has a known JURISDICTION_LOCATIONS entry, its raw
+    address is known to be missing city/state (e.g. Chicago/NYC/Austin/LA's
+    FieldMappings, Allen's PDF ledger) -- geocode with that city/state
+    appended directly, rather than ever trying the bare address on its own.
+    An unqualified street-only address handed to a *national* geocoder has
+    no way to disambiguate and can match a same-named street somewhere else
+    in the country entirely (seen in practice: a handful of LA permits
+    landed near the geographic center of the US this way) -- there's no
+    reason to risk that when we already know city/state is needed.
+
+    Only jurisdictions with no such entry (assumed to already supply a
+    complete address, e.g. an API returning
+    "1955 GLACIER PARK AV, NAPERVILLE, IL 60540") get geocoded as given.
     """
     if not address or not address.strip():
         return None, None
 
     address = address.strip()
-
-    lat, lon = _geocode_one_line(address)
-    if lat is not None:
-        return lat, lon
-
     city_state = JURISDICTION_LOCATIONS.get(jurisdiction.lower())
-    if not city_state:
-        return None, None
 
-    return _geocode_one_line(f"{address}, {city_state}")
+    if city_state:
+        return _geocode_one_line(f"{address}, {city_state}")
+
+    return _geocode_one_line(address)
