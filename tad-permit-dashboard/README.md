@@ -93,8 +93,13 @@ unclickable dots once real ingestion volume backfills coordinates.
   network access to those hosts in the environment this was built in), so
   actual coverage may be lower than expected until confirmed against a real
   ingestion run.
-- Allen (PDF ledger) permits have **no coordinate data at all** -- there's
-  nothing in a PDF ledger page to extract a lat/lon from.
+- Allen (PDF ledger) permits have no geometry field to extract coordinates
+  from directly, but get a best-effort address-based geocode instead (via
+  the free US Census Bureau geocoder, combining the permit's street address
+  with Allen's known city/state) -- see `tad-permit-pipeline/geo.py`. This
+  is the same fallback API sources get when their raw payload is missing or
+  has a malformed geometry field. It can still come back empty for a bad or
+  ambiguous address, or if the geocoder is unreachable.
 - Permits ingested *before* this feature existed have `NULL` coordinates
   regardless of source, since the column didn't exist yet when they were
   written. Re-run ingestion to backfill them.

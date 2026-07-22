@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from hatchet_sdk import Hatchet, Context
 import llm_processor
 import database
+import geo
 from logging_setup import get_logger
 from permit_types import normalize_permit_type
 
@@ -113,14 +114,18 @@ def parse_ledger_page(input: PageIngestionInput, ctx: Context) -> dict:
                 )
                 continue
 
+            # PDF ledgers never carry coordinates themselves -- this is the
+            # only source of a map location for these permits.
+            latitude, longitude = geo.geocode_address(permit.address, input.jurisdiction)
+
             try:
                 cursor.execute("""
                     INSERT OR IGNORE INTO permits (
                         permit_id, jurisdiction, source_format, source_url, filing_date,
                         permit_type_raw, permit_type_normalized, address, owner_name,
-                        contractor_name, valuation, square_footage, raw_scope_of_work,
-                        scope_summary, building_systems
-                    ) VALUES (?, ?, 'PDF', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        contractor_name, valuation, square_footage, latitude, longitude,
+                        raw_scope_of_work, scope_summary, building_systems
+                    ) VALUES (?, ?, 'PDF', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     permit.permit_id,
                     input.jurisdiction,
@@ -133,6 +138,8 @@ def parse_ledger_page(input: PageIngestionInput, ctx: Context) -> dict:
                     permit.contractor_name,
                     permit.valuation,
                     permit.square_footage,
+                    latitude,
+                    longitude,
                     permit.raw_scope_of_work,
                     permit.scope_summary,
                     json.dumps(permit.building_systems)

@@ -95,10 +95,12 @@ export default function MapPage() {
               {mappable.length === 0 ? (
                 <div className="h-[32rem] w-full rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center text-sm text-gray-400 text-center px-8">
                   None of the currently matched permits have coordinates yet.
-                  Coordinates are only captured going forward from the
-                  Chicago/NYC/Austin APIs -- re-run ingestion for those
-                  jurisdictions to backfill them, or adjust filters. Allen
-                  (PDF ledger) permits never have coordinates.
+                  Coordinates are captured going forward from the
+                  Chicago/NYC/Austin APIs directly, or geocoded from address
+                  for Allen (PDF ledger) permits and any API record missing
+                  one -- re-run ingestion to backfill older rows, or adjust
+                  filters. A geocode can still fail for a bad/ambiguous
+                  address.
                 </div>
               ) : (
                 <PermitsMap

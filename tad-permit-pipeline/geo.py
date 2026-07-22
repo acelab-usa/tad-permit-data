@@ -1,4 +1,6 @@
-"""Best-effort latitude/longitude extraction from Socrata API payloads.
+"""Best-effort latitude/longitude extraction from Socrata API payloads, plus
+an address-based geocoding fallback for records that don't come with
+coordinates at all.
 
 Socrata datasets expose location data inconsistently -- sometimes as plain
 `latitude`/`longitude` fields, sometimes as a nested point-geometry field
@@ -15,6 +17,8 @@ If coordinate coverage looks low after a real ingestion run, check the
 actual raw API response for the real field name and add it there.
 """
 from typing import Optional
+
+import requests
 
 from logging_setup import get_logger
 
@@ -79,3 +83,62 @@ def extract_lat_lon(raw_item: dict, point_fields: tuple = ()) -> tuple:
                 return lat, lon
 
     return None, None
+
+
+# One fixed "home city" per registered jurisdiction -- a permit's raw address
+# (e.g. "945 Stockton Dr, 4130 4") is usually missing city/state entirely,
+# but every permit from a given jurisdiction was filed in the same city, so
+# this is enough to disambiguate the address for the geocoder.
+JURISDICTION_LOCATIONS = {
+    "chicago": "Chicago, IL",
+    "nyc": "New York, NY",
+    "austin": "Austin, TX",
+    "allen": "Allen, TX",
+}
+
+_CENSUS_GEOCODER_URL = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress"
+_GEOCODE_TIMEOUT_SECONDS = 5
+
+
+def geocode_address(address: Optional[str], jurisdiction: str) -> tuple:
+    """Best-effort fallback: resolves a street address to (lat, lon) via the
+    US Census Bureau's free geocoder (no API key, US addresses only -- fine
+    since every registered jurisdiction is a US city).
+
+    For sources that never provide coordinates at all (PDF ledgers) or that
+    didn't for a particular record (a malformed/missing API geometry field),
+    this is the only way those permits end up with a map location. Returns
+    (None, None) on any failure -- bad/unmatched address, network error,
+    unrecognized jurisdiction -- so ingestion always continues without a
+    location rather than blocking on this.
+    """
+    if not address or not address.strip():
+        return None, None
+
+    city_state = JURISDICTION_LOCATIONS.get(jurisdiction.lower())
+    if not city_state:
+        logger.warning("geocode_address: no known city/state for jurisdiction '%s', skipping", jurisdiction)
+        return None, None
+
+    one_line = f"{address.strip()}, {city_state}"
+
+    try:
+        response = requests.get(
+            _CENSUS_GEOCODER_URL,
+            params={"address": one_line, "benchmark": "Public_AR_Current", "format": "json"},
+            timeout=_GEOCODE_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        matches = response.json()["result"]["addressMatches"]
+    except (requests.RequestException, ValueError, KeyError) as e:
+        logger.warning("geocode_address: lookup failed for '%s': %s", one_line, e)
+        return None, None
+
+    if not matches:
+        logger.info("geocode_address: no match for '%s'", one_line)
+        return None, None
+
+    coords = matches[0].get("coordinates", {})
+    # Census returns x=longitude, y=latitude.
+    lat, lon = _to_float(coords.get("y")), _to_float(coords.get("x"))
+    return (lat, lon) if _valid(lat, lon) else (None, None)

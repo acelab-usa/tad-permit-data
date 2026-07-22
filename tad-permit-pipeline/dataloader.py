@@ -15,6 +15,7 @@ from hatchet_sdk import Hatchet
 from pydantic import ValidationError
 
 import database
+import geo
 from logging_setup import get_logger
 from permit import PermitSchemaV2
 from sources import APIPermitSource, PDFPermitSource, get_source, list_sources
@@ -53,6 +54,11 @@ def _ingest_api_source(source: APIPermitSource, size: int):
             failed += 1
             logger.error("%s: record failed schema validation, skipping it: %s", source.name, e)
             continue
+
+        if validated_permit.latitude is None or validated_permit.longitude is None:
+            lat, lon = geo.geocode_address(validated_permit.address, validated_permit.jurisdiction)
+            if lat is not None:
+                validated_permit.latitude, validated_permit.longitude = lat, lon
 
         try:
             was_inserted = database.insert_permit(validated_permit)
