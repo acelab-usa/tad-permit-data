@@ -81,6 +81,11 @@ jurisdiction, using a palette assigned by sorted position rather than a
 hardcoded name -> color map, so a newly-registered jurisdiction just gets
 the next color automatically.
 
+Nearby permits cluster into a numbered bubble at lower zoom levels
+(`leaflet.markercluster`) and split apart as you zoom in -- without this, a
+dense area (e.g. downtown Chicago) would render as a pile of overlapping,
+unclickable dots once real ingestion volume backfills coordinates.
+
 **Coordinate coverage is partial and source-dependent:**
 - Chicago/NYC/Austin (API sources) capture `latitude`/`longitude` from their
   Socrata payloads on ingestion -- see `tad-permit-pipeline/geo.py`. The
@@ -97,8 +102,9 @@ the next color automatically.
 The map page shows a "N of M have no location data yet" count so this
 limitation is visible in the UI rather than silently dropping permits.
 
-`leaflet`'s marker uses SVG `CircleMarker`s rather than image-based
-markers specifically to avoid a well-known Leaflet+bundler gotcha (default
-marker icon assets not resolving correctly through Next.js's build) --
-there was no need to work around it since circles don't need icon images at
-all.
+Markers are `L.divIcon`s (plain HTML/CSS colored circles) rather than
+Leaflet's default image-based marker, for two reasons: it avoids a
+well-known Leaflet+bundler gotcha (default marker icon assets not resolving
+correctly through Next.js's build), and `leaflet.markercluster` only
+clusters `L.Marker`-like layers -- the SVG `CircleMarker`s used before
+clustering was added aren't compatible with it.

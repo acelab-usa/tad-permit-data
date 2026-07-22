@@ -1,8 +1,12 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
-import { useEffect } from "react";
-import { CircleMarker, MapContainer, TileLayer, Tooltip, useMap } from "react-leaflet";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
+import L from "leaflet";
+import "leaflet.markercluster";
+import { useEffect, useRef } from "react";
+import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import { colorForJurisdiction } from "@/lib/jurisdictionColors";
 import type { Permit } from "@/lib/types";
 
@@ -15,6 +19,31 @@ interface PermitsMapProps {
 
 const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795]; // continental US
 const DEFAULT_ZOOM = 4;
+
+// Leaflet measures its container's size once when the map is created and
+// has no way to know if that size changes afterward (a window resize, a
+// sidebar collapsing, a parent layout shift) unless something tells it to
+// recheck. Defensive measure, not specific to any bug found so far --
+// keeps the map correctly sized regardless of what else changes around it.
+function SyncMapSize() {
+  const map = useMap();
+
+  useEffect(() => {
+    const container = map.getContainer();
+    // Correct any stale initial measurement once layout has had a chance to settle.
+    const raf = requestAnimationFrame(() => map.invalidateSize());
+
+    const observer = new ResizeObserver(() => map.invalidateSize());
+    observer.observe(container);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+    };
+  }, [map]);
+
+  return null;
+}
 
 // Recenters/fits the map to the current point set whenever it changes
 // (a filter changed, or the underlying permit list refreshed).
@@ -41,6 +70,90 @@ function formatValuation(value: number | null): string {
   return value === null ? "—" : `$${value.toLocaleString("en-US")}`;
 }
 
+// Leaflet's default marker icon is an image asset that doesn't resolve
+// correctly through Next.js's bundler without extra config -- a well-known
+// gotcha. A colored circle drawn via a DivIcon (plain HTML/CSS) sidesteps
+// that entirely while keeping the same jurisdiction-colored-dot look the
+// unclustered version had, and DivIcons work fine with markercluster
+// (unlike the CircleMarker/SVG-path layer used before, which
+// leaflet.markercluster doesn't support -- it only clusters L.Marker-like
+// layers).
+function markerIcon(color: string, isSelected: boolean): L.DivIcon {
+  const size = isSelected ? 18 : 12;
+  const border = isSelected ? 3 : 1;
+  const opacity = isSelected ? 0.9 : 0.6;
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${color};opacity:${opacity};border:${border}px solid ${color};box-sizing:content-box;"></div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
+
+function tooltipHtml(permit: Permit): string {
+  return `
+    <div style="font-size:12px;line-height:1.4">
+      <div style="font-weight:600">${permit.permit_id} — ${permit.jurisdiction}</div>
+      <div>${permit.address || "UNKNOWN"}</div>
+      <div>${permit.permit_type_normalized ?? "—"}</div>
+      <div>${formatValuation(permit.valuation)}</div>
+    </div>
+  `;
+}
+
+// Builds (and rebuilds, on permit-set changes) a marker cluster group --
+// nearby markers collapse into a single numbered bubble at lower zoom
+// levels and split apart as you zoom in, so a dense cluster of permits
+// (e.g. downtown Chicago) stays clickable instead of a pile of
+// overlapping, unclickable dots.
+function ClusteredMarkers({ permits, jurisdictions, selectedId, onSelect }: PermitsMapProps) {
+  const map = useMap();
+  const markersByIdRef = useRef<Map<number, L.Marker>>(new Map());
+  const idKey = permits.map((p) => p.id).join(",");
+  const jurisdictionKey = jurisdictions.join(",");
+
+  useEffect(() => {
+    const clusterGroup = L.markerClusterGroup({ maxClusterRadius: 60 });
+    const markersById = new Map<number, L.Marker>();
+
+    permits.forEach((permit) => {
+      const color = colorForJurisdiction(permit.jurisdiction, jurisdictions);
+      const marker = L.marker([permit.latitude as number, permit.longitude as number], {
+        icon: markerIcon(color, false),
+      });
+      marker.bindTooltip(tooltipHtml(permit), { direction: "top", offset: [0, -8] });
+      marker.on("click", () => onSelect(permit));
+      clusterGroup.addLayer(marker);
+      markersById.set(permit.id, marker);
+    });
+
+    map.addLayer(clusterGroup);
+    markersByIdRef.current = markersById;
+
+    return () => {
+      map.removeLayer(clusterGroup);
+      markersByIdRef.current = new Map();
+    };
+    // Rebuild only when the actual point set or color assignment changes --
+    // onSelect is stable (setState setter) and selectedId is handled below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idKey, jurisdictionKey, map]);
+
+  // Update just the selected/unselected marker icons in place, without
+  // rebuilding (and re-clustering) the whole layer on every click.
+  useEffect(() => {
+    markersByIdRef.current.forEach((marker, id) => {
+      const permit = permits.find((p) => p.id === id);
+      if (!permit) return;
+      const color = colorForJurisdiction(permit.jurisdiction, jurisdictions);
+      marker.setIcon(markerIcon(color, id === selectedId));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, idKey, jurisdictionKey]);
+
+  return null;
+}
+
 export default function PermitsMap({ permits, jurisdictions, selectedId, onSelect }: PermitsMapProps) {
   return (
     <MapContainer
@@ -53,36 +166,14 @@ export default function PermitsMap({ permits, jurisdictions, selectedId, onSelec
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      <SyncMapSize />
       <FitBounds permits={permits} />
-      {permits.map((permit) => {
-        const color = colorForJurisdiction(permit.jurisdiction, jurisdictions);
-        const isSelected = selectedId === permit.id;
-        return (
-          <CircleMarker
-            key={permit.id}
-            center={[permit.latitude as number, permit.longitude as number]}
-            radius={isSelected ? 9 : 6}
-            pathOptions={{
-              color,
-              fillColor: color,
-              fillOpacity: isSelected ? 0.9 : 0.6,
-              weight: isSelected ? 3 : 1,
-            }}
-            eventHandlers={{ click: () => onSelect(permit) }}
-          >
-            <Tooltip direction="top" offset={[0, -6]}>
-              <div className="text-xs leading-snug">
-                <div className="font-semibold">
-                  {permit.permit_id} — {permit.jurisdiction}
-                </div>
-                <div>{permit.address || "UNKNOWN"}</div>
-                <div>{permit.permit_type_normalized ?? "—"}</div>
-                <div>{formatValuation(permit.valuation)}</div>
-              </div>
-            </Tooltip>
-          </CircleMarker>
-        );
-      })}
+      <ClusteredMarkers
+        permits={permits}
+        jurisdictions={jurisdictions}
+        selectedId={selectedId}
+        onSelect={onSelect}
+      />
     </MapContainer>
   );
 }
