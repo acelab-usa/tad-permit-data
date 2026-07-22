@@ -44,6 +44,8 @@ def init_db():
                 contractor_name TEXT,
                 valuation REAL,
                 square_footage REAL,
+                latitude REAL,
+                longitude REAL,
 
                 raw_scope_of_work TEXT,
                 scope_summary TEXT,
@@ -52,6 +54,16 @@ def init_db():
                 UNIQUE(permit_id, jurisdiction)
             )
         ''')
+
+        # Migration guard for databases created before latitude/longitude
+        # existed -- CREATE TABLE IF NOT EXISTS above is a no-op on an
+        # already-existing table, so add the columns directly if missing
+        # rather than requiring anyone to drop and re-ingest.
+        existing_columns = {row[1] for row in cursor.execute("PRAGMA table_info(permits)").fetchall()}
+        for column in ("latitude", "longitude"):
+            if column not in existing_columns:
+                cursor.execute(f"ALTER TABLE permits ADD COLUMN {column} REAL")
+                logger.info("Migrated existing permits table: added missing column '%s'", column)
 
         conn.commit()
         logger.info("Database initialized successfully: '%s'", DB_PATH)
@@ -72,8 +84,9 @@ def insert_permit(permit: PermitSchemaV2) -> bool:
         INSERT OR IGNORE INTO permits (
                 permit_id, jurisdiction, source_url, source_format, address, filing_date,
                 owner_name, contractor_name, permit_type_raw, permit_type_normalized,
-                square_footage, valuation, raw_scope_of_work, scope_summary, building_systems
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                square_footage, valuation, latitude, longitude,
+                raw_scope_of_work, scope_summary, building_systems
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         '''
 
     values = (
@@ -89,6 +102,8 @@ def insert_permit(permit: PermitSchemaV2) -> bool:
         permit.permit_type_normalized,
         permit.square_footage,
         permit.valuation,
+        permit.latitude,
+        permit.longitude,
         permit.raw_scope_of_work,
         permit.scope_summary,
         json.dumps(permit.building_systems) if permit.building_systems else "[]",
