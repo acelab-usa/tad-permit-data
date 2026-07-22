@@ -177,6 +177,16 @@ SOURCES = {
     "allen": PDFLedgerSource(
         name="allen",
         folder_path="./allen_pdfs",
+        extraction_hints=(
+            "You are an expert data extraction engine parsing a municipal ledger page.\n"
+            "CRITICAL BLOCK-IDENTIFICATION RULES:\n"
+            "1. Every distinct permit entry begins at the far left with a unique alpha-numeric Permit Number pattern "
+            "(e.g., '000397-2026-CO', '000808-2026-CO*', '007623-2025-CB*').\n"
+            "2. IGNORE the text color of the permit number—it may be RED or DARK BLUE depending on the work class category.\n"
+            "3. Extract all permit classifications on the page, including 'Commercial Building - Alteration', "
+            "'Certificate of Occupancy - C/O Stand Alone', 'Commercial Misc', etc.\n"
+            "4. Disregard lines containing summary metrics or 'SUBTOTALS'."
+        ),
     ),
 }
 

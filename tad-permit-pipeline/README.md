@@ -48,6 +48,8 @@ Nothing outside `sources/registry.py` needs to change to onboard a new city.
 "somecity": PDFLedgerSource(name="somecity", folder_path="./somecity_pdfs"),
 ```
 
+If the city's ledger has quirks the generic extraction prompt won't know about on its own (a specific permit-number pattern, category names, formatting to ignore), pass optional `extraction_hints` — see the `allen` entry in `sources/registry.py`. Leave it unset until you've actually seen the new city's real output and know it needs tuning; a guessed hint for an unseen format is as likely to hurt as help.
+
 Then run it the same way as any other jurisdiction: `uv run python dataloader.py somecity`.
 
 ---

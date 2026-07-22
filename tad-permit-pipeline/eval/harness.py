@@ -51,7 +51,9 @@ def run_enrichment_suite() -> list:
 def run_pdf_extraction_suite() -> list:
     results = []
     for case in _load_cases("pdf_extraction"):
-        extracted = llm_processor.extract_multiple_permits_from_text(case["page_text"])
+        extracted = llm_processor.extract_multiple_permits_from_text(
+            case["page_text"], extraction_hints=case.get("extraction_hints")
+        )
         actual_permits = extracted.permits_found if extracted else []
         score = score_pdf_extraction_case(case["expected_permits"], actual_permits)
         results.append({"name": case.get("name", case["_file"]), **score})
