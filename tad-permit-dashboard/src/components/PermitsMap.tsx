@@ -91,15 +91,15 @@ function formatValuation(value: number | null): string {
 // leaflet.markercluster doesn't support -- it only clusters L.Marker-like
 // layers).
 //
-// A solid-fill dot with a light ring (rather than the same-color
+// A solid-fill dot with a dark ring (rather than the same-color
 // half-opacity border the first version used) reads with real contrast
-// against the dark basemap regardless of hue, and a drop shadow gives it
+// against the light basemap regardless of hue, and a drop shadow gives it
 // depth instead of looking like a flat sticker. Selected state swaps the
 // ring to the brand accent instead of just growing the dot.
 function markerIcon(color: string, isSelected: boolean): L.DivIcon {
   const size = isSelected ? 14 : 10;
   const ringWidth = isSelected ? 3 : 2;
-  const ringColor = isSelected ? "var(--accent)" : "rgba(245, 244, 238, 0.85)";
+  const ringColor = isSelected ? "var(--accent)" : "rgba(10, 10, 10, 0.75)";
   const total = size + ringWidth * 2;
   return L.divIcon({
     className: "",
@@ -201,12 +201,15 @@ export default function PermitsMap({ permits, jurisdictions, selectedId, onSelec
       className="h-[32rem] w-full rounded-lg border border-gray-200 dark:border-gray-700"
     >
       <TileLayer
-        // A dark basemap so the map reads as part of the app's black/green
-        // theme instead of a light-gray box sitting in an otherwise dark
-        // page. CartoDB's free "dark matter" tiles are the standard choice
-        // for this (no API key required).
+        // CartoDB's "Voyager" basemap: muted, modern colors (soft cream
+        // roads, pale blue water) rather than a stark black or the more
+        // dated-looking default OSM raster tiles. Not black -- a solid-
+        // black basemap read as a dead zone rather than part of the theme;
+        // this keeps the map its own natural colors (like a photo or
+        // embedded image legitimately breaks from a dark app chrome) while
+        // the floating controls and markers stay on-brand.
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         subdomains="abcd"
         noWrap
       />
