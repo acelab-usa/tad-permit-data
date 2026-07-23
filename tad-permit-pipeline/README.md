@@ -176,6 +176,18 @@ Hatchet event volume is decoupled from data volume, which matters if you're on a
 
 See `tests/test_dataloader.py`, `tests/test_workflow.py`, `tests/test_pdf_ledger.py`, and `tests/test_database_cursor.py` for coverage of the batching and resume behavior.
 
+### Running Ingestion On a Schedule
+
+`run_all_ingestion.py` runs every registered jurisdiction in one invocation -- the single command a scheduler (cron, a GitHub Actions scheduled workflow, etc.) needs, instead of one per city, and a newly-registered jurisdiction is picked up automatically with no scheduler config to update:
+
+```bash
+uv run python run_all_ingestion.py                        # every registered jurisdiction, size=100
+uv run python run_all_ingestion.py --size 25               # smaller batch per city
+uv run python run_all_ingestion.py --jurisdictions dc,la    # just these two, e.g. for testing
+```
+
+Each jurisdiction is isolated -- one failing outright is logged and skipped, the rest still run. This only *triggers* ingestion and pushes Hatchet events; `workflow.py` still needs to be running separately to actually process them, and for real scheduled use it needs to run as a persistent background service (systemd/supervisor/pm2/a container with a restart policy), not something started by hand in a terminal.
+
 ### Step 3: Browse & Search Permits
 The lookup dashboard lives in the sibling `tad-permit-dashboard/` Next.js project (reads `permits.db` directly, no ingestion changes needed). See `../tad-permit-dashboard/README.md`, or briefly:
 
