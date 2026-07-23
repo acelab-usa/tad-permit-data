@@ -27,3 +27,53 @@ class SinglePermitExtract(BaseModel):
 
 class MonthlyPDFPageExtractSchema(BaseModel):
     permits_found: List[SinglePermitExtract] = Field(description="A list of all individual building permits discovered within this text layout.")
+
+class ProposedFieldMapping(BaseModel):
+    """LLM-proposed draft of a sources.field_mapping.FieldMapping, from a raw
+    Socrata dataset's column metadata + a sample record. See
+    onboard_jurisdiction.py -- this is a draft for a human to review, not
+    something auto-applied to sources/registry.py."""
+    permit_id_field: Optional[str] = Field(
+        default=None, description="Raw field holding the unique permit/case number."
+    )
+    address_fields: List[str] = Field(
+        default_factory=list,
+        description="Raw field(s) that together form the site's street address, in the order they should be joined. Empty if no usable address field exists.",
+    )
+    address_separator: str = Field(
+        default=" ",
+        description="Separator to join address_fields with -- ' ' for plain street parts, ', ' if the fields are already city/state/zip-like.",
+    )
+    date_fields: List[str] = Field(
+        default_factory=list,
+        description="Raw field(s) representing the permit's filing/issue date, in priority order (first non-blank wins).",
+    )
+    owner_name_fields: List[str] = Field(
+        default_factory=list,
+        description="Raw field(s) for the property owner's name. Leave empty if no such field exists, or if it looks redacted/too incomplete to trust (e.g. only a first name with no last name).",
+    )
+    contractor_name_fields: List[str] = Field(
+        default_factory=list, description="Raw field(s) for the contractor/licensee/business name, if any."
+    )
+    permit_type_fields: List[str] = Field(
+        default_factory=list,
+        description="Raw field(s) carrying a construction-type signal (e.g. permit type, work class), in priority order. Only include a secondary field if it plausibly adds real signal, not just because it exists.",
+    )
+    valuation_field: Optional[str] = Field(
+        default=None, description="Raw numeric field for the permit's reported cost/valuation."
+    )
+    square_footage_field: Optional[str] = Field(
+        default=None, description="Raw numeric field for reported square footage/floor area, if any."
+    )
+    scope_fields: List[str] = Field(
+        default_factory=list,
+        description="Raw field(s) with a free-text description of the work being done, in priority order.",
+    )
+    point_fields: List[str] = Field(
+        default_factory=list,
+        description="Raw field name(s) holding a NESTED point/geometry object (e.g. a Socrata 'location' column with its own latitude/longitude or GeoJSON coordinates) -- NOT plain top-level latitude/longitude columns, which are already detected automatically and don't need to be listed.",
+    )
+    unmapped_notes: Optional[str] = Field(
+        default=None,
+        description="Brief notes on anything left unmapped and why, or any ambiguity worth a human's attention -- e.g. 'no clear owner field' or 'two candidate date fields, picked the more common one'.",
+    )

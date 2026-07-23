@@ -53,7 +53,15 @@ DENVER_MAPPING = FieldMapping(
 ),
 ```
 
-Only reach for a hand-written `mapper_func` (as Chicago/Austin used to have, and NYC still partly does via `scope_builder`) when a field genuinely needs logic a flat mapping can't express -- e.g. NYC's scope text is built from two labeled fields, not "pick one and truncate." See `sources/registry.py` for the real Chicago/NYC/Austin/Seattle configs, and `tests/test_field_mapping.py` for regression coverage confirming the generic mapper reproduces the pre-refactor behavior exactly.
+Only reach for a hand-written `mapper_func` (as Chicago/Austin used to have, and NYC still partly does via `scope_builder`) when a field genuinely needs logic a flat mapping can't express -- e.g. NYC's scope text is built from two labeled fields, not "pick one and truncate." See `sources/registry.py` for the real Chicago/NYC/Austin/Seattle/LA configs, and `tests/test_field_mapping.py` for regression coverage confirming the generic mapper reproduces the pre-refactor behavior exactly.
+
+**Drafting that `FieldMapping` by hand is still the slow part** -- `onboard_jurisdiction.py` speeds it up: point it at a Socrata resource URL and it fetches the dataset's column metadata (field names/types/descriptions -- stronger signal than a raw sample record alone) plus a few real rows, asks an LLM to propose a mapping, then immediately runs that proposal against the real rows and prints the result plus a list of things worth double-checking (an unmapped required field, a permit type that normalized to `"Other"` and may need a new `permit_types.py` entry, an empty owner/valuation field worth confirming is real).
+
+```bash
+uv run python onboard_jurisdiction.py denver https://data.denvergov.org/resource/xxxx.json
+```
+
+It only prints a draft -- it never touches `sources/registry.py` itself. Two real bugs already slipped past careful *manual* mapping in this project (NYC's config initially missing `valuation_field`; LA's `"Bldg-New"` falling into `"Other"`), and neither would've been caught by clever field-matching alone -- only by looking at real mapped output. This tool exists to make that review faster, not to skip it.
 
 **If it's a monthly PDF ledger**, point the generic PDF adapter at a folder — no mapper needed, since the LLM reads each page and finds every permit listed on it:
 
