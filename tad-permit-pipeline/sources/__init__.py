@@ -4,8 +4,13 @@ To add a new jurisdiction:
 
   * If it's a Socrata (or Socrata-shaped JSON) API, instantiate a
     `SocrataAPISource` in `sources/registry.py` with the endpoint URL, the
-    date column to sort on, and a small mapper function that turns one raw
-    record into the fields `PermitSchemaV2` expects.
+    date column to sort on, and a FieldMapping (see field_mapping.py) --
+    most cities need no custom mapping code at all.
+
+  * If it's an ArcGIS REST FeatureServer/MapServer layer, instantiate an
+    `ArcGISFeatureSource` the same way -- see arcgis.py. Its geometry gets
+    flattened into plain latitude/longitude at fetch time, so it plugs
+    into the same FieldMapping machinery Socrata sources use.
 
   * If it's a PDF ledger (monthly report, scanned table, etc.), instantiate
     a `PDFLedgerSource` pointing at the folder the files live in. Page text

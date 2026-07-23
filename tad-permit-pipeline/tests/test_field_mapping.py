@@ -16,7 +16,7 @@ from typing import Optional
 
 from geo import extract_lat_lon
 from permit_types import normalize_permit_type
-from sources.field_mapping import build_mapper
+from sources.field_mapping import _safe_date as safe_date, build_mapper
 from sources.registry import (
     AUSTIN_MAPPING,
     CHICAGO_MAPPING,
@@ -337,6 +337,32 @@ class LaMappingTests(unittest.TestCase):
         self.assertIsNone(mapped["square_footage"])
         self.assertIsNone(mapped["filing_date"])
         self.assertEqual(mapped["address"], "1 MAIN")
+
+
+class SafeDateTests(unittest.TestCase):
+    """ArcGIS date fields (esriFieldTypeDate) come back as Unix epoch
+    milliseconds -- a plain int -- not an ISO string like Socrata's. Found
+    via an end-to-end onboard_jurisdiction.py simulation against
+    ArcGIS-shaped data: every ArcGIS permit was silently getting
+    filing_date=None before this."""
+
+    def test_parses_socrata_iso_string(self):
+        self.assertEqual(safe_date("2026-03-01T00:00:00.000").isoformat(), "2026-03-01")
+
+    def test_parses_arcgis_epoch_millis(self):
+        # 2023-11-14T22:13:20Z
+        self.assertEqual(safe_date(1700000000000).isoformat(), "2023-11-14")
+
+    def test_parses_arcgis_epoch_millis_as_float(self):
+        self.assertEqual(safe_date(1700000000000.0).isoformat(), "2023-11-14")
+
+    def test_blank_and_none_return_none(self):
+        self.assertIsNone(safe_date(None))
+        self.assertIsNone(safe_date(""))
+        self.assertIsNone(safe_date(0))
+
+    def test_garbage_string_returns_none(self):
+        self.assertIsNone(safe_date("not a date"))
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ and the `nyc` entry in sources/registry.py, the one existing case that
 needs it.
 """
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, Optional
 
 from geo import extract_lat_lon
@@ -40,6 +40,19 @@ def _safe_float(value) -> Optional[float]:
 def _safe_date(raw_date):
     if not raw_date:
         return None
+
+    # ArcGIS date fields (esriFieldTypeDate) come back as Unix epoch
+    # milliseconds -- a plain int/float -- not an ISO string like Socrata's.
+    # Caught here rather than in a source-specific layer since it's a
+    # property of the raw *value*, the same way this function already
+    # handles either platform's other fields identically.
+    if isinstance(raw_date, (int, float)):
+        try:
+            return datetime.fromtimestamp(raw_date / 1000, tz=timezone.utc).date()
+        except (ValueError, OverflowError, OSError):
+            logger.warning("Could not parse epoch-ms date %r, storing as null", raw_date)
+            return None
+
     try:
         date_str = str(raw_date).split("T")[0].strip()
         return datetime.strptime(date_str, "%Y-%m-%d").date()

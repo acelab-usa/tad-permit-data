@@ -13,17 +13,32 @@ from models import ProposedFieldMapping
 
 class ParseResourceTests(unittest.TestCase):
     def test_valid_url(self):
-        base, resource_id = oj._parse_resource("https://data.lacity.org/resource/xnhu-aczu.json")
+        base, resource_id = oj._parse_socrata_resource("https://data.lacity.org/resource/xnhu-aczu.json")
         self.assertEqual(base, "https://data.lacity.org")
         self.assertEqual(resource_id, "xnhu-aczu")
 
     def test_missing_resource_path_raises(self):
         with self.assertRaises(ValueError):
-            oj._parse_resource("https://data.lacity.org/dataset/xnhu-aczu")
+            oj._parse_socrata_resource("https://data.lacity.org/dataset/xnhu-aczu")
 
     def test_missing_scheme_raises(self):
         with self.assertRaises(ValueError):
-            oj._parse_resource("data.lacity.org/resource/xnhu-aczu.json")
+            oj._parse_socrata_resource("data.lacity.org/resource/xnhu-aczu.json")
+
+
+class IsArcgisUrlTests(unittest.TestCase):
+    def test_detects_featureserver(self):
+        self.assertTrue(oj._is_arcgis_url(
+            "https://maps2.dcgis.dc.gov/dcgis/rest/services/FEEDS/DCRA/FeatureServer/17"
+        ))
+
+    def test_detects_mapserver(self):
+        self.assertTrue(oj._is_arcgis_url(
+            "https://maps.westfield.in.gov/arcgis/rest/services/CommunityDev/BuildingPermits/MapServer"
+        ))
+
+    def test_socrata_url_is_not_arcgis(self):
+        self.assertFalse(oj._is_arcgis_url("https://data.lacity.org/resource/xnhu-aczu.json"))
 
 
 class FetchDatasetTests(unittest.TestCase):
@@ -64,6 +79,56 @@ class FetchDatasetTests(unittest.TestCase):
         with patch("onboard_jurisdiction.requests.get", side_effect=fake_get):
             with self.assertRaises(ValueError):
                 oj.fetch_dataset("https://data.denvergov.org/resource/xxxx.json", sample_size=1)
+
+
+class FetchArcgisDatasetTests(unittest.TestCase):
+    LAYER_URL = "https://maps2.dcgis.dc.gov/dcgis/rest/services/FEEDS/DCRA/FeatureServer/17"
+
+    def test_dispatches_to_arcgis_and_flattens_features(self):
+        layer_metadata = {
+            "fields": [
+                {"name": "PERMIT_NO", "alias": "Permit Number", "type": "esriFieldTypeString"},
+                {"name": "ISSUE_DATE", "alias": "Issue Date", "type": "esriFieldTypeDate"},
+            ]
+        }
+        query_result = {
+            "features": [
+                {"attributes": {"PERMIT_NO": "B2024-001", "ISSUE_DATE": 1700000000000},
+                 "geometry": {"x": -77.02, "y": 38.9}},
+            ]
+        }
+
+        def fake_get(url, params=None, timeout=None):
+            response = MagicMock()
+            response.raise_for_status.return_value = None
+            response.json.return_value = query_result if url.endswith("/query") else layer_metadata
+            return response
+
+        with patch("onboard_jurisdiction.requests.get", side_effect=fake_get):
+            columns, sample_records = oj.fetch_dataset(self.LAYER_URL, sample_size=1)
+
+        self.assertEqual(len(columns), 2)
+        self.assertEqual(columns[0]["fieldName"], "PERMIT_NO")
+        self.assertEqual(columns[1]["dataTypeName"], "esriFieldTypeDate")
+        # Flattened: geometry merged in as plain lat/lon, same shape a
+        # Socrata source would produce -- this is what lets propose_mapping/
+        # review/to_field_mapping stay platform-agnostic.
+        self.assertEqual(sample_records[0]["PERMIT_NO"], "B2024-001")
+        self.assertEqual(sample_records[0]["latitude"], 38.9)
+        self.assertEqual(sample_records[0]["longitude"], -77.02)
+
+    def test_error_response_raises(self):
+        def fake_get(url, params=None, timeout=None):
+            response = MagicMock()
+            response.raise_for_status.return_value = None
+            response.json.return_value = {"fields": []} if not url.endswith("/query") else {
+                "error": {"code": 400, "message": "bad request"}
+            }
+            return response
+
+        with patch("onboard_jurisdiction.requests.get", side_effect=fake_get):
+            with self.assertRaises(ValueError):
+                oj.fetch_dataset(self.LAYER_URL, sample_size=1)
 
 
 class ToFieldMappingTests(unittest.TestCase):

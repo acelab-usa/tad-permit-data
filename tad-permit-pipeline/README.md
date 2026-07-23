@@ -14,7 +14,7 @@ The pipeline is intentionally decoupled into separate layers to maintain high co
 
 * **`permit.py`**: The **Data Ingestion Schema Layer**. Holds the single source of truth layout for raw Socrata payloads using Pydantic.
 * **`models.py`**: The **AI Output Schema Layer**. Defines the structured data output layout for our LLM responses.
-* **`sources/`**: The **Jurisdiction Adapter Layer**. Every city/authority the pipeline ingests is a small adapter registered in `sources/registry.py` — either a `SocrataAPISource` (one API record = one permit, via a mapper function) or a `PDFLedgerSource` (one PDF page = zero-or-more permits, via LLM extraction). See "Adding a New Jurisdiction" below.
+* **`sources/`**: The **Jurisdiction Adapter Layer**. Every city/authority the pipeline ingests is a small adapter registered in `sources/registry.py` — a `SocrataAPISource` or `ArcGISFeatureSource` (one API record = one permit, via a `FieldMapping`) or a `PDFLedgerSource` (one PDF page = zero-or-more permits, via LLM extraction). See "Adding a New Jurisdiction" below.
 * **`database.py`**: The **Storage Engine Layer**. Handles the SQLite connection lifecycle, database creation scripts, and standard SQL validation rules.
 * **`llm_processor.py`**: The **AI Engine Layer**. Manages structured inference requests to OpenRouter models (such as Gemini 2.5 Flash), with retry/backoff on transient failures.
 * **`dataloader.py`**: The **Ingestion Orchestrator**. Looks up the requested jurisdiction's adapter, fetches/maps records, and pushes events to the background workflow.
@@ -55,10 +55,24 @@ DENVER_MAPPING = FieldMapping(
 
 Only reach for a hand-written `mapper_func` (as Chicago/Austin used to have, and NYC still partly does via `scope_builder`) when a field genuinely needs logic a flat mapping can't express -- e.g. NYC's scope text is built from two labeled fields, not "pick one and truncate." See `sources/registry.py` for the real Chicago/NYC/Austin/Seattle/LA configs, and `tests/test_field_mapping.py` for regression coverage confirming the generic mapper reproduces the pre-refactor behavior exactly.
 
-**Drafting that `FieldMapping` by hand is still the slow part** -- `onboard_jurisdiction.py` speeds it up: point it at a Socrata resource URL and it fetches the dataset's column metadata (field names/types/descriptions -- stronger signal than a raw sample record alone) plus a few real rows, asks an LLM to propose a mapping, then immediately runs that proposal against the real rows and prints the result plus a list of things worth double-checking (an unmapped required field, a permit type that normalized to `"Other"` and may need a new `permit_types.py` entry, an empty owner/valuation field worth confirming is real).
+**If it's an ArcGIS REST `FeatureServer`/`MapServer` layer** (common for mid-size cities/counties that publish permits as a GIS layer rather than a Socrata portal), it's the same `FieldMapping` plus `ArcGISFeatureSource` (see `sources/arcgis.py`) instead of `SocrataAPISource`:
+
+```python
+"dc": ArcGISFeatureSource(
+    name="dc",
+    url="https://maps2.dcgis.dc.gov/dcgis/rest/services/FEEDS/DCRA/FeatureServer/17",
+    date_column="ISSUE_DATE",
+    mapper_func=build_mapper(DC_MAPPING),
+),
+```
+
+`url` must include the numeric layer ID (a service can host several layers; only one is usually the permits table). Unlike Socrata, ArcGIS splits each record into `attributes` and a separate point `geometry` (`{"x": lon, "y": lat}`) -- `ArcGISFeatureSource` flattens that into plain top-level `latitude`/`longitude` at fetch time, the same shape `geo.extract_lat_lon()` already checks first, so no `point_fields` config is ever needed for an ArcGIS source. One other real difference already found and handled: ArcGIS date fields are Unix epoch milliseconds (an int), not an ISO string like Socrata's -- `sources/field_mapping.py`'s `_safe_date()` detects and converts both.
+
+**Drafting that `FieldMapping` by hand is still the slow part** -- `onboard_jurisdiction.py` speeds it up for either platform: point it at a Socrata resource URL or an ArcGIS layer URL and it fetches the dataset's column metadata (field names/types/descriptions -- stronger signal than a raw sample record alone) plus a few real rows, asks an LLM to propose a mapping, then immediately runs that proposal against the real rows and prints the result plus a list of things worth double-checking (an unmapped required field, a permit type that normalized to `"Other"` and may need a new `permit_types.py` entry, an empty owner/valuation field worth confirming is real).
 
 ```bash
 uv run python onboard_jurisdiction.py denver https://data.denvergov.org/resource/xxxx.json
+uv run python onboard_jurisdiction.py dc https://maps2.dcgis.dc.gov/dcgis/rest/services/FEEDS/DCRA/FeatureServer/17
 ```
 
 It only prints a draft -- it never touches `sources/registry.py` itself. Two real bugs already slipped past careful *manual* mapping in this project (NYC's config initially missing `valuation_field`; LA's `"Bldg-New"` falling into `"Other"`), and neither would've been caught by clever field-matching alone -- only by looking at real mapped output. This tool exists to make that review faster, not to skip it.

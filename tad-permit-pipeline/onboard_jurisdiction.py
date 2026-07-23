@@ -1,11 +1,11 @@
-"""onboard_jurisdiction.py -- draft a FieldMapping for a new Socrata city.
+"""onboard_jurisdiction.py -- draft a FieldMapping for a new city, from
+either a Socrata or an ArcGIS REST FeatureServer/MapServer URL.
 
-Fetches a Socrata dataset's column metadata (field names, types,
-descriptions -- richer signal than a raw sample record alone) plus a few
-sample records, asks an LLM to propose a sources.field_mapping.FieldMapping
-matching them, then immediately runs that proposal against the real sample
-records so you can eyeball the result before anything touches
-sources/registry.py.
+Fetches the dataset's column metadata (field names, types, descriptions --
+richer signal than a raw sample record alone) plus a few sample records,
+asks an LLM to propose a sources.field_mapping.FieldMapping matching them,
+then immediately runs that proposal against the real sample records so you
+can eyeball the result before anything touches sources/registry.py.
 
 This is a draft-and-review tool, not an auto-onboarding pipeline. Two real
 bugs already slipped past careful manual mapping in this project (NYC's
@@ -16,11 +16,14 @@ speeds up the tedious part (reading raw JSON, guessing which column is
 what); it doesn't replace checking the result against reality.
 
 Usage:
-    uv run python onboard_jurisdiction.py <jurisdiction> <resource-url> [--limit N]
+    uv run python onboard_jurisdiction.py <jurisdiction> <url> [--limit N]
 
-Example:
+Examples:
     uv run python onboard_jurisdiction.py denver \\
         https://data.denvergov.org/resource/xxxx.json
+
+    uv run python onboard_jurisdiction.py dc \\
+        https://maps2.dcgis.dc.gov/dcgis/rest/services/FEEDS/DCRA/FeatureServer/17
 """
 import argparse
 import json
@@ -34,6 +37,7 @@ from llm_processor import _call_with_retry, client
 from logging_setup import get_logger
 from models import ProposedFieldMapping
 from permit_types import normalize_permit_type
+from sources.arcgis import _flatten_feature
 from sources.field_mapping import FieldMapping, build_mapper
 
 logger = get_logger("onboard_jurisdiction")
@@ -41,7 +45,11 @@ logger = get_logger("onboard_jurisdiction")
 REQUEST_TIMEOUT_SECONDS = 15
 
 
-def _parse_resource(resource_url: str) -> tuple:
+def _is_arcgis_url(url: str) -> bool:
+    return "/FeatureServer" in url or "/MapServer" in url
+
+
+def _parse_socrata_resource(resource_url: str) -> tuple:
     """Splits a Socrata `/resource/{id}.json` URL into (scheme://domain, resource_id)."""
     parsed = urlparse(resource_url)
     if not parsed.scheme or not parsed.netloc:
@@ -64,14 +72,14 @@ def _fetch_json(url: str, params: dict = None) -> object:
     return response.json()
 
 
-def fetch_dataset(resource_url: str, sample_size: int) -> tuple:
-    """Returns (columns, sample_records) for the given Socrata resource URL.
+def _fetch_socrata_dataset(resource_url: str, sample_size: int) -> tuple:
+    """Returns (columns, sample_records) for a Socrata resource URL.
 
     `columns` is Socrata's own column metadata (name/fieldName/dataTypeName/
     description) -- much stronger signal for guessing intent than a raw
     field name alone. `sample_records` are real rows to validate against.
     """
-    base, resource_id = _parse_resource(resource_url)
+    base, resource_id = _parse_socrata_resource(resource_url)
 
     metadata = _fetch_json(f"{base}/api/views/{resource_id}.json")
     columns = [
@@ -91,10 +99,60 @@ def fetch_dataset(resource_url: str, sample_size: int) -> tuple:
     return columns, sample_records
 
 
+def _fetch_arcgis_dataset(layer_url: str, sample_size: int) -> tuple:
+    """Returns (columns, sample_records) for an ArcGIS FeatureServer/
+    MapServer layer URL (including its numeric layer ID).
+
+    ArcGIS's own field metadata (name/type/alias) plays the same role
+    Socrata's column metadata does. Sample records come back as
+    {"features": [{"attributes": {...}, "geometry": {...}}, ...]} --
+    flattened via the same _flatten_feature() the real ArcGISFeatureSource
+    adapter uses, so the rest of this script (propose_mapping, review,
+    to_field_mapping) never needs to know which platform it's looking at.
+    """
+    layer_url = layer_url.rstrip("/")
+
+    metadata = _fetch_json(layer_url, params={"f": "json"})
+    if "error" in metadata:
+        raise ValueError(f"ArcGIS error fetching layer metadata: {metadata['error']}")
+
+    columns = [
+        {
+            "fieldName": f.get("name"),
+            "name": f.get("alias") or f.get("name"),
+            "dataTypeName": f.get("type"),  # e.g. "esriFieldTypeDate", "esriFieldTypeString"
+            "description": None,  # ArcGIS field metadata rarely includes one
+        }
+        for f in metadata.get("fields", [])
+    ]
+
+    query = _fetch_json(f"{layer_url}/query", params={
+        "where": "1=1", "outFields": "*", "f": "json", "resultRecordCount": sample_size,
+    })
+    if "error" in query:
+        raise ValueError(f"ArcGIS error fetching sample records: {query['error']}")
+
+    features = query.get("features", [])
+    if not features:
+        raise ValueError(f"No sample records returned from {layer_url}")
+
+    sample_records = [_flatten_feature(f) for f in features]
+    return columns, sample_records
+
+
+def fetch_dataset(resource_url: str, sample_size: int) -> tuple:
+    """Returns (columns, sample_records) for either a Socrata or an ArcGIS
+    FeatureServer/MapServer URL, dispatching on URL shape."""
+    if _is_arcgis_url(resource_url):
+        return _fetch_arcgis_dataset(resource_url, sample_size)
+    return _fetch_socrata_dataset(resource_url, sample_size)
+
+
 _SYSTEM_PROMPT = """You are helping onboard a new city's building-permit API into a pipeline \
-that normalizes many cities' data into one shared schema. You'll be given a Socrata \
-dataset's column metadata and a real sample record. Propose which raw column(s) map to \
-each canonical field.
+that normalizes many cities' data into one shared schema. You'll be given a permit \
+dataset's column metadata and a real sample record (from either a Socrata or an ArcGIS \
+FeatureServer/MapServer source -- treat both the same way). Propose which raw column(s) \
+map to each canonical field.
 
 Canonical fields and what they mean:
 - permit_id_field: the unique permit/case/application number.
@@ -110,9 +168,11 @@ construction, alteration, demolition, electrical, etc.) -- not permit *status* o
 review-stage columns.
 - valuation_field / square_footage_field: numeric columns for reported cost and area.
 - scope_fields: free-text work description columns.
-- point_fields: a column holding a NESTED point/geometry object (Socrata "point" type \
-with its own lat/lon or GeoJSON coordinates) -- do NOT list plain top-level \
-latitude/longitude columns, those are already detected automatically without any config.
+- point_fields: a column holding a NESTED point/geometry object (a Socrata "point"-typed \
+column with its own lat/lon or GeoJSON coordinates) -- do NOT list plain top-level \
+latitude/longitude columns, those are already detected automatically without any config. \
+(An ArcGIS source's geometry is already flattened into plain latitude/longitude before \
+you see it, so this will normally be empty for ArcGIS sources.)
 
 Be conservative: leave a field unmapped (empty list / null) rather than guessing at a \
 weak candidate -- a wrong mapping is worse than an honest gap a human can fill in. Use \
@@ -229,7 +289,11 @@ def review(mapping: FieldMapping, sample_records: list) -> None:
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("jurisdiction", help="Short jurisdiction key to use, e.g. 'denver'")
-    parser.add_argument("resource_url", help="Socrata '.../resource/<id>.json' URL")
+    parser.add_argument(
+        "resource_url",
+        help="A Socrata '.../resource/<id>.json' URL, or an ArcGIS '.../FeatureServer/<layer>' "
+             "or '.../MapServer/<layer>' URL",
+    )
     parser.add_argument("--limit", type=int, default=5, help="Sample records to fetch and validate against (default: 5)")
     args = parser.parse_args()
 
@@ -253,12 +317,14 @@ def main():
     mapping = to_field_mapping(proposal, args.jurisdiction, args.resource_url)
     review(mapping, sample_records)
 
+    source_class = "ArcGISFeatureSource" if _is_arcgis_url(args.resource_url) else "SocrataAPISource"
+
     print(f"\n=== Draft FieldMapping (paste into sources/registry.py after reviewing above) ===\n")
     print(_format_as_python(mapping, f"{args.jurisdiction.upper()}_MAPPING"))
     print(
         f"\nNot done yet -- this hasn't touched sources/registry.py. Review the flags above, "
         f"add any needed permit_types.py entries, then add {args.jurisdiction.upper()}_MAPPING "
-        f"and a \"{args.jurisdiction}\": SocrataAPISource(...) entry by hand, the same way "
+        f"and a \"{args.jurisdiction}\": {source_class}(...) entry by hand, the same way "
         f"Seattle/LA were added."
     )
 
