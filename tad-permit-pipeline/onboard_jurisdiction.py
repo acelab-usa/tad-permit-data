@@ -15,8 +15,13 @@ field-matching alone, only by looking at real mapped output. This tool
 speeds up the tedious part (reading raw JSON, guessing which column is
 what); it doesn't replace checking the result against reality.
 
+Prints a one-line summary per sample record by default (pass --verbose for
+the full mapped JSON, e.g. to check raw_scope_of_work), plus both the
+FieldMapping and the ready-to-paste SOURCES dict entry (SocrataAPISource
+or ArcGISFeatureSource, picked by URL shape) at the end.
+
 Usage:
-    uv run python onboard_jurisdiction.py <jurisdiction> <url> [--limit N]
+    uv run python onboard_jurisdiction.py <jurisdiction> <url> [--limit N] [--verbose]
 
 Examples:
     uv run python onboard_jurisdiction.py denver \\
@@ -250,10 +255,62 @@ def _format_as_python(mapping: FieldMapping, var_name: str) -> str:
     return "\n".join(lines)
 
 
+def _derive_socrata_query_url(resource_url: str) -> str:
+    """Best-effort derivation of the bulk /api/v3/views/{id}/query.json
+    endpoint from a plain /resource/{id}.json URL -- matches the pattern
+    every existing Socrata entry in sources/registry.py uses. Not
+    independently verified live; confirm with a real ingestion run, same
+    caveat as those entries."""
+    base, resource_id = _parse_socrata_resource(resource_url)
+    return f"{base}/api/v3/views/{resource_id}/query.json"
+
+
+def format_source_entry(mapping: FieldMapping, resource_url: str, jurisdiction: str, var_name: str) -> str:
+    """Returns the ready-to-paste SOURCES dict entry for sources/registry.py,
+    picking ArcGISFeatureSource or SocrataAPISource by URL shape."""
+    date_column = mapping.date_fields[0] if mapping.date_fields else "TODO_DATE_COLUMN"
+
+    if _is_arcgis_url(resource_url):
+        return (
+            f'"{jurisdiction}": ArcGISFeatureSource(\n'
+            f'    name="{jurisdiction}",\n'
+            f'    url="{resource_url}",\n'
+            f'    date_column="{date_column}",\n'
+            f'    mapper_func=build_mapper({var_name}),\n'
+            f"),"
+        )
+
+    query_url = _derive_socrata_query_url(resource_url)
+    return (
+        f'"{jurisdiction}": SocrataAPISource(\n'
+        f'    name="{jurisdiction}",\n'
+        f'    url="{query_url}",\n'
+        f'    date_column="{date_column}",\n'
+        f'    mapper_func=build_mapper({var_name}),\n'
+        f"),"
+    )
+
+
 _VALUATION_FIELD_FEE_HINTS = ("fee", "fees")  # e.g. FEES_PAID -- a permit fee is not a project valuation
 
 
-def review(mapping: FieldMapping, sample_records: list) -> None:
+def _summarize_sample(mapped: dict) -> str:
+    """One-line summary of a mapped record -- just enough to sanity-check
+    the mapping (did each field get a sensible value), not the full
+    record. Use --verbose for the complete JSON, e.g. to inspect
+    raw_scope_of_work."""
+    if mapped["latitude"] is not None and mapped["longitude"] is not None:
+        coords = f"({mapped['latitude']:.4f}, {mapped['longitude']:.4f})"
+    else:
+        coords = "(no coords)"
+    valuation = f"${mapped['valuation']:,.0f}" if mapped["valuation"] is not None else "no valuation"
+    return (
+        f"{mapped['permit_id']} | {mapped['address']} | {mapped['filing_date']} | "
+        f"{mapped['permit_type_raw']} -> {mapped['permit_type_normalized']} | {valuation} | {coords}"
+    )
+
+
+def review(mapping: FieldMapping, sample_records: list, verbose: bool = False) -> None:
     """Runs the proposed mapping against every fetched sample record and
     prints the result, flagging anything worth a second look -- an unmapped
     canonical field, a permit type that normalized to 'Other' (the exact
@@ -267,8 +324,11 @@ def review(mapping: FieldMapping, sample_records: list) -> None:
     other_samples = []
     for i, raw_item in enumerate(sample_records, start=1):
         mapped = mapper(raw_item)
-        print(f"\n--- Sample {i} ---")
-        print(json.dumps(mapped, indent=2, default=str))
+        if verbose:
+            print(f"\n--- Sample {i} ---")
+            print(json.dumps(mapped, indent=2, default=str))
+        else:
+            print(f"[{i}] {_summarize_sample(mapped)}")
         if mapped["permit_type_normalized"] == "Other":
             other_samples.append({f: raw_item.get(f) for f in mapping.permit_type_fields})
 
@@ -317,6 +377,10 @@ def main():
              "or '.../MapServer/<layer>' URL",
     )
     parser.add_argument("--limit", type=int, default=5, help="Sample records to fetch and validate against (default: 5)")
+    parser.add_argument(
+        "--verbose", "-v", action="store_true",
+        help="Print the full mapped JSON for every sample instead of a one-line summary",
+    )
     args = parser.parse_args()
 
     try:
@@ -337,17 +401,17 @@ def main():
         print(f"\nLLM notes: {proposal.unmapped_notes}")
 
     mapping = to_field_mapping(proposal, args.jurisdiction, args.resource_url)
-    review(mapping, sample_records)
+    review(mapping, sample_records, verbose=args.verbose)
 
-    source_class = "ArcGISFeatureSource" if _is_arcgis_url(args.resource_url) else "SocrataAPISource"
+    var_name = f"{args.jurisdiction.upper()}_MAPPING"
 
-    print(f"\n=== Draft FieldMapping (paste into sources/registry.py after reviewing above) ===\n")
-    print(_format_as_python(mapping, f"{args.jurisdiction.upper()}_MAPPING"))
+    print("\n=== Paste into sources/registry.py after reviewing the flags above ===\n")
+    print(_format_as_python(mapping, var_name))
+    print()
+    print(format_source_entry(mapping, args.resource_url, args.jurisdiction, var_name))
     print(
-        f"\nNot done yet -- this hasn't touched sources/registry.py. Review the flags above, "
-        f"add any needed permit_types.py entries, then add {args.jurisdiction.upper()}_MAPPING "
-        f"and a \"{args.jurisdiction}\": {source_class}(...) entry by hand, the same way "
-        f"Seattle/LA were added."
+        "\nNot done yet -- this hasn't touched sources/registry.py itself. Add any needed "
+        "permit_types.py entries first if flagged above, then paste both blocks in by hand."
     )
 
 

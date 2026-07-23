@@ -286,5 +286,83 @@ class ProposeMappingTests(unittest.TestCase):
                 oj.propose_mapping(columns=[], sample_record={})
 
 
+class ReviewVerbosityTests(unittest.TestCase):
+    """review() defaults to a compact one-line-per-sample summary; the full
+    per-sample JSON dump is opt-in via verbose=True."""
+
+    def _mapping(self):
+        from sources.field_mapping import FieldMapping
+        return FieldMapping(
+            jurisdiction="dc",
+            source_url="https://x",
+            permit_id_field="permit_id",
+            address_fields=("address",),
+            date_fields=("issue_date",),
+            permit_type_fields=("permit_type",),
+            valuation_field="valuation",
+            scope_fields=("raw_scope_of_work",),
+        )
+
+    def _sample(self):
+        return [{
+            "permit_id": "G123", "address": "1 Main St", "issue_date": "2026-01-01",
+            "permit_type": "New Construction", "valuation": "50000",
+            "raw_scope_of_work": "a very long description that should not appear by default" * 3,
+        }]
+
+    def test_default_is_compact_one_liner(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            oj.review(self._mapping(), self._sample())
+        output = buf.getvalue()
+        self.assertIn("[1] G123 | 1 Main St | 2026-01-01 | New Construction -> New Construction | $50,000 | (no coords)", output)
+        self.assertNotIn("a very long description", output)
+        self.assertNotIn("--- Sample 1 ---", output)
+
+    def test_verbose_prints_full_json(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            oj.review(self._mapping(), self._sample(), verbose=True)
+        output = buf.getvalue()
+        self.assertIn("--- Sample 1 ---", output)
+        self.assertIn("a very long description", output)
+
+
+class FormatSourceEntryTests(unittest.TestCase):
+    def _mapping(self, **overrides):
+        from sources.field_mapping import FieldMapping
+        kwargs = dict(
+            jurisdiction="denver",
+            source_url="https://data.denvergov.org/resource/xxxx.json",
+            permit_id_field="permit_number",
+            address_fields=("address",),
+            date_fields=("issue_date",),
+            permit_type_fields=("permit_type",),
+        )
+        kwargs.update(overrides)
+        return FieldMapping(**kwargs)
+
+    def test_socrata_entry(self):
+        entry = oj.format_source_entry(
+            self._mapping(), "https://data.denvergov.org/resource/xxxx.json", "denver", "DENVER_MAPPING"
+        )
+        self.assertIn('"denver": SocrataAPISource(', entry)
+        self.assertIn('url="https://data.denvergov.org/api/v3/views/xxxx/query.json"', entry)
+        self.assertIn('date_column="issue_date"', entry)
+        self.assertIn("mapper_func=build_mapper(DENVER_MAPPING)", entry)
+
+    def test_arcgis_entry(self):
+        layer_url = "https://maps2.dcgis.dc.gov/dcgis/rest/services/FEEDS/DCRA/FeatureServer/17"
+        entry = oj.format_source_entry(self._mapping(), layer_url, "dc", "DC_MAPPING")
+        self.assertIn('"dc": ArcGISFeatureSource(', entry)
+        self.assertIn(f'url="{layer_url}"', entry)
+        self.assertIn("mapper_func=build_mapper(DC_MAPPING)", entry)
+
+    def test_missing_date_fields_leaves_a_todo_placeholder(self):
+        mapping = self._mapping(date_fields=())
+        entry = oj.format_source_entry(mapping, "https://x/resource/y.json", "x", "X_MAPPING")
+        self.assertIn("TODO_DATE_COLUMN", entry)
+
+
 if __name__ == "__main__":
     unittest.main()
