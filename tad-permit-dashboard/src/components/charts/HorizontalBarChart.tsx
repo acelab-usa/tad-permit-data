@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import Link from "next/link";
 import type { DataPoint } from "@/lib/trends";
 import { niceTicks } from "./niceTicks";
 
@@ -8,6 +9,11 @@ interface HorizontalBarChartProps {
   data: DataPoint[]; // expected pre-sorted, descending
   valueFormat: (value: number) => string;
   ariaLabel: string;
+  // When provided, each bar's label becomes a link (e.g. a contractor name
+  // linking to its drill-down page) instead of plain text. Optional --
+  // most uses of this chart (jurisdiction, permit type) have nowhere to
+  // link to.
+  linkFor?: (label: string) => string;
 }
 
 const BAR_HEIGHT = 18;
@@ -19,7 +25,7 @@ const GRID_TEMPLATE = "minmax(0,7rem) 1fr minmax(3rem,4rem)";
 // One series, one hue (magnitude is encoded by bar length, not by color --
 // see dataviz skill: a value-ramp on nominal categories double-encodes the
 // same information and fails the categorical checks by design).
-export default function HorizontalBarChart({ data, valueFormat, ariaLabel }: HorizontalBarChartProps) {
+export default function HorizontalBarChart({ data, valueFormat, ariaLabel, linkFor }: HorizontalBarChartProps) {
   const [hovered, setHovered] = useState<number | null>(null);
   const maxValue = data.length > 0 ? Math.max(...data.map((d) => d.value)) : 0;
   const ticks = niceTicks(maxValue, 4);
@@ -59,17 +65,34 @@ export default function HorizontalBarChart({ data, valueFormat, ariaLabel }: Hor
           onFocus: () => setHovered(i),
           onBlur: () => setHovered((h) => (h === i ? null : h)),
         };
+        const labelClassName = `truncate text-xs outline-none ${
+          linkFor
+            ? "text-[var(--accent)] hover:underline"
+            : "text-gray-600 dark:text-gray-300"
+        }`;
         return (
           <Fragment key={d.label}>
-            <div
-              tabIndex={0}
-              className="truncate text-xs text-gray-600 dark:text-gray-300 outline-none"
-              style={{ gridRow: i + 1, gridColumn: 1 }}
-              title={d.label}
-              {...rowHandlers}
-            >
-              {d.label}
-            </div>
+            {linkFor ? (
+              <Link
+                href={linkFor(d.label)}
+                className={labelClassName}
+                style={{ gridRow: i + 1, gridColumn: 1 }}
+                title={d.label}
+                {...rowHandlers}
+              >
+                {d.label}
+              </Link>
+            ) : (
+              <div
+                tabIndex={0}
+                className={labelClassName}
+                style={{ gridRow: i + 1, gridColumn: 1 }}
+                title={d.label}
+                {...rowHandlers}
+              >
+                {d.label}
+              </div>
+            )}
             <div className="relative" style={{ gridRow: i + 1, gridColumn: 2, height: BAR_HEIGHT }} {...rowHandlers}>
               <div
                 className="absolute inset-y-0 left-0 rounded-r-[4px] bg-[var(--accent)] transition-[filter]"

@@ -1,13 +1,14 @@
 "use client";
 
 import { useId, useState } from "react";
+import Link from "next/link";
 
 interface ChartCardProps {
   title: string;
   subtitle?: string;
   children: React.ReactNode;
   tableColumns: [string, string];
-  tableRows: { label: string; value: string }[];
+  tableRows: { label: string; value: string; href?: string }[];
 }
 
 // Shared card chrome for every trends chart: title, the chart itself, and
@@ -56,7 +57,15 @@ export default function ChartCard({ title, subtitle, children, tableColumns, tab
             <tbody>
               {tableRows.map((row) => (
                 <tr key={row.label} className="border-t border-gray-100 dark:border-gray-800">
-                  <td className="px-3 py-1.5 text-gray-800 dark:text-gray-100">{row.label}</td>
+                  <td className="px-3 py-1.5 text-gray-800 dark:text-gray-100">
+                    {row.href ? (
+                      <Link href={row.href} className="text-[var(--accent)] hover:underline">
+                        {row.label}
+                      </Link>
+                    ) : (
+                      row.label
+                    )}
+                  </td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-gray-800 dark:text-gray-100">
                     {row.value}
                   </td>

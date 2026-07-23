@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: "/table", label: "Table", icon: "📋" },
   { href: "/map", label: "Map", icon: "🗺️" },
   { href: "/trends", label: "Trends", icon: "📈" },
+  { href: "/contractors", label: "Contractors", icon: "🧰" },
 ];
 
 // App-level navigation. A vertical rail on lg+ screens (the standard
@@ -15,6 +16,13 @@ const NAV_ITEMS = [
 // horizontal pill bar on small screens where a fixed rail would eat too
 // much width. One component, two layouts, so there's a single source of
 // truth for "what pages exist" instead of two nav lists to keep in sync.
+// Exact match for "/" (every path starts with "/"); prefix match for
+// everything else, so a nested route like /contractors/[name] still
+// highlights the "Contractors" nav item.
+function isActive(pathname: string, href: string): boolean {
+  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
 
@@ -27,7 +35,7 @@ export default function Sidebar() {
         </div>
         <nav className="flex flex-col gap-0.5">
           {NAV_ITEMS.map((item) => {
-            const active = pathname === item.href;
+            const active = isActive(pathname, item.href);
             return (
               <Link
                 key={item.href}
@@ -49,7 +57,7 @@ export default function Sidebar() {
       <div className="lg:hidden border-b border-white/10 bg-[var(--background)] px-6 py-3">
         <nav className="flex gap-1 rounded-lg border border-white/10 p-1 w-fit">
           {NAV_ITEMS.map((item) => {
-            const active = pathname === item.href;
+            const active = isActive(pathname, item.href);
             return (
               <Link
                 key={item.href}

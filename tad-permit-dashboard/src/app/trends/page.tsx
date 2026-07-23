@@ -94,12 +94,17 @@ export default function TrendsPage() {
                 title="Top contractors"
                 subtitle="Most active contractors by permit count, current filter selection"
                 tableColumns={["Contractor", "Permits"]}
-                tableRows={byContractor.map((d) => ({ label: d.label, value: d.value.toLocaleString("en-US") }))}
+                tableRows={byContractor.map((d) => ({
+                  label: d.label,
+                  value: d.value.toLocaleString("en-US"),
+                  href: `/contractors/${encodeURIComponent(d.label)}`,
+                }))}
               >
                 <HorizontalBarChart
                   data={byContractor}
                   valueFormat={(v) => v.toLocaleString("en-US")}
                   ariaLabel="Permit count by contractor"
+                  linkFor={(label) => `/contractors/${encodeURIComponent(label)}`}
                 />
               </ChartCard>
             </main>

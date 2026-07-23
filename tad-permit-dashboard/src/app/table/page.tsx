@@ -7,7 +7,12 @@ import PermitsTable from "@/components/PermitsTable";
 import PermitDetail from "@/components/PermitDetail";
 import { usePermits } from "@/lib/usePermits";
 import { REGISTERED_JURISDICTIONS } from "@/lib/jurisdictions";
-import type { Permit } from "@/lib/types";
+import { downloadCsv, toCsv } from "@/lib/csv";
+import { PERMIT_CSV_COLUMNS, type Permit } from "@/lib/types";
+
+function exportFilename(): string {
+  return `permits-export-${new Date().toISOString().slice(0, 10)}.csv`;
+}
 
 export default function TablePage() {
   const {
@@ -29,13 +34,23 @@ export default function TablePage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
           🏗️ Permit Lookup
         </h1>
-        <button
-          type="button"
-          onClick={refresh}
-          className="rounded-lg bg-[var(--accent)] text-black font-medium px-3 py-1.5 text-sm hover:brightness-95 transition-[filter]"
-        >
-          🔄 Refresh data
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => downloadCsv(exportFilename(), toCsv(filtered, PERMIT_CSV_COLUMNS))}
+            disabled={filtered.length === 0}
+            className="rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            ⬇️ Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={refresh}
+            className="rounded-lg bg-[var(--accent)] text-black font-medium px-3 py-1.5 text-sm hover:brightness-95 transition-[filter]"
+          >
+            🔄 Refresh data
+          </button>
+        </div>
       </div>
 
       {error && (

@@ -85,12 +85,17 @@ export default function OverviewPage() {
             <ChartCard
               title="Top contractors"
               tableColumns={["Contractor", "Permits"]}
-              tableRows={byContractor.map((d) => ({ label: d.label, value: d.value.toLocaleString("en-US") }))}
+              tableRows={byContractor.map((d) => ({
+                label: d.label,
+                value: d.value.toLocaleString("en-US"),
+                href: `/contractors/${encodeURIComponent(d.label)}`,
+              }))}
             >
               <HorizontalBarChart
                 data={byContractor}
                 valueFormat={(v) => v.toLocaleString("en-US")}
                 ariaLabel="Permit count by contractor"
+                linkFor={(label) => `/contractors/${encodeURIComponent(label)}`}
               />
             </ChartCard>
           </div>
