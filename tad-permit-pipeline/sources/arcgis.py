@@ -81,6 +81,12 @@ class ArcGISFeatureSource(APIPermitSource):
             "resultRecordCount": size,
             "resultOffset": (page - 1) * size,
             "orderByFields": f"{self.date_column} DESC",
+            # Without this, ArcGIS returns geometry in the layer's native
+            # (often projected, e.g. State Plane feet) spatial reference,
+            # not lat/lon -- those out-of-range values then fail
+            # geo._valid()'s sanity check and silently become null instead
+            # of erroring. 4326 = WGS84, plain lat/lon degrees.
+            "outSR": "4326",
         }
 
         last_error = None

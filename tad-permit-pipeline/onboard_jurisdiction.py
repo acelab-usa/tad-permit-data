@@ -128,6 +128,12 @@ def _fetch_arcgis_dataset(layer_url: str, sample_size: int) -> tuple:
 
     query = _fetch_json(f"{layer_url}/query", params={
         "where": "1=1", "outFields": "*", "f": "json", "resultRecordCount": sample_size,
+        # Request WGS84 explicitly -- otherwise geometry comes back in the
+        # layer's native (often projected, e.g. State Plane feet) spatial
+        # reference, which looks like garbage lat/lon to a human reviewing
+        # the sample output and fails geo._valid()'s range check for real
+        # ingestion. Same fix as sources/arcgis.py's ArcGISFeatureSource.
+        "outSR": "4326",
     })
     if "error" in query:
         raise ValueError(f"ArcGIS error fetching sample records: {query['error']}")
@@ -244,21 +250,27 @@ def _format_as_python(mapping: FieldMapping, var_name: str) -> str:
     return "\n".join(lines)
 
 
+_VALUATION_FIELD_FEE_HINTS = ("fee", "fees")  # e.g. FEES_PAID -- a permit fee is not a project valuation
+
+
 def review(mapping: FieldMapping, sample_records: list) -> None:
     """Runs the proposed mapping against every fetched sample record and
     prints the result, flagging anything worth a second look -- an unmapped
-    canonical field, or a permit type that normalized to 'Other' (the exact
-    class of gap LA's "Bldg-New" surfaced)."""
+    canonical field, a permit type that normalized to 'Other' (the exact
+    class of gap LA's "Bldg-New" surfaced, printed with the actual raw
+    candidate values so it's clear whether that's a taxonomy gap or
+    genuinely no signal), or a valuation field that looks like it might
+    actually be a processing fee rather than a project cost."""
     mapper = build_mapper(mapping)
 
     print("\n=== Mapped sample records ===")
-    other_count = 0
+    other_samples = []
     for i, raw_item in enumerate(sample_records, start=1):
         mapped = mapper(raw_item)
         print(f"\n--- Sample {i} ---")
         print(json.dumps(mapped, indent=2, default=str))
         if mapped["permit_type_normalized"] == "Other":
-            other_count += 1
+            other_samples.append({f: raw_item.get(f) for f in mapping.permit_type_fields})
 
     print("\n=== Review flags ===")
     unmapped = [
@@ -278,12 +290,22 @@ def review(mapping: FieldMapping, sample_records: list) -> None:
         print("- owner_name_fields is empty -- confirm this dataset really has no usable owner field.")
     if not mapping.valuation_field:
         print("- valuation_field is empty -- confirm this dataset really has no cost/valuation field.")
-    if other_count:
+    elif any(hint in mapping.valuation_field.lower() for hint in _VALUATION_FIELD_FEE_HINTS):
         print(
-            f"- {other_count}/{len(sample_records)} sample(s) normalized to permit_type 'Other' -- "
-            "the raw permit_type value(s) may need a new entry in permit_types.py's "
-            "_KEYWORD_RULES/_EXACT_MATCH_OVERRIDES (same as LA's 'Bldg-New' needed)."
+            f"- valuation_field ('{mapping.valuation_field}') looks like it might be a processing "
+            "FEE, not the project's reported cost -- these are usually very different numbers "
+            "(a fee is often a small fraction of, or flat schedule against, actual valuation). "
+            "Check the real field list for a genuine cost/valuation field before trusting this."
         )
+    if other_samples:
+        print(
+            f"- {len(other_samples)}/{len(sample_records)} sample(s) normalized to permit_type 'Other' -- "
+            "the raw permit_type value(s) may need a new entry in permit_types.py's "
+            "_KEYWORD_RULES/_EXACT_MATCH_OVERRIDES (same as LA's 'Bldg-New' needed), or there may "
+            "genuinely be no construction-type signal in this record. Raw candidate values seen:"
+        )
+        for values in other_samples:
+            print(f"    {values}")
 
 
 def main():

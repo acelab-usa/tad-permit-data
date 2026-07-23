@@ -98,7 +98,10 @@ class FetchArcgisDatasetTests(unittest.TestCase):
             ]
         }
 
+        calls = []
+
         def fake_get(url, params=None, timeout=None):
+            calls.append((url, params))
             response = MagicMock()
             response.raise_for_status.return_value = None
             response.json.return_value = query_result if url.endswith("/query") else layer_metadata
@@ -116,6 +119,13 @@ class FetchArcgisDatasetTests(unittest.TestCase):
         self.assertEqual(sample_records[0]["PERMIT_NO"], "B2024-001")
         self.assertEqual(sample_records[0]["latitude"], 38.9)
         self.assertEqual(sample_records[0]["longitude"], -77.02)
+
+        # Without outSR=4326, ArcGIS returns geometry in the layer's native
+        # (often projected) spatial reference instead of lat/lon degrees --
+        # found via a real DC FeatureServer run where every coordinate
+        # silently came back null in the preview because of exactly this.
+        query_call_params = next(p for u, p in calls if u.endswith("/query"))
+        self.assertEqual(query_call_params["outSR"], "4326")
 
     def test_error_response_raises(self):
         def fake_get(url, params=None, timeout=None):
@@ -202,6 +212,30 @@ class ReviewTests(unittest.TestCase):
         output = self._run_review(mapping, samples)
         self.assertIn("normalized to permit_type 'Other'", output)
         self.assertIn("permit_types.py", output)
+        # The actual raw value(s) considered should be printed, not just the
+        # count -- found via a real DC run where "Other" alone wasn't enough
+        # to tell a taxonomy gap apart from genuinely no signal.
+        self.assertIn("Zorp-Blorp", output)
+
+    def test_flags_valuation_field_that_looks_like_a_fee(self):
+        from sources.field_mapping import FieldMapping
+
+        mapping = FieldMapping(
+            jurisdiction="dc",
+            source_url="https://x",
+            permit_id_field="permit_number",
+            address_fields=("address",),
+            date_fields=("issue_date",),
+            permit_type_fields=("permit_type",),
+            valuation_field="FEES_PAID",
+        )
+        samples = [{
+            "permit_number": "1", "address": "1 Main St", "issue_date": "2026-01-01",
+            "permit_type": "New Construction", "FEES_PAID": "36.00",
+        }]
+        output = self._run_review(mapping, samples)
+        self.assertIn("looks like it might be a processing FEE", output)
+        self.assertNotIn("valuation_field is empty", output)  # it IS set, just suspect
 
     def test_no_flags_when_everything_maps_cleanly(self):
         from sources.field_mapping import FieldMapping

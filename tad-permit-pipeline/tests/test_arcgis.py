@@ -76,6 +76,11 @@ class ArcGISFeatureSourceTests(unittest.TestCase):
         params = mock_get.call_args.kwargs["params"]
         self.assertEqual(params["resultRecordCount"], 2)
         self.assertEqual(params["orderByFields"], "ISSUE_DATE DESC")
+        # Without this, ArcGIS returns geometry in the layer's native
+        # (often projected) spatial reference instead of lat/lon degrees --
+        # found via a real DC FeatureServer run where every coordinate
+        # silently came back null because of exactly this.
+        self.assertEqual(params["outSR"], "4326")
 
     def test_error_body_with_200_status_does_not_look_like_zero_records(self):
         # ArcGIS returns HTTP 200 with an {"error": ...} body on a bad
