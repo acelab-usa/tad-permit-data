@@ -179,8 +179,13 @@ export default function PermitsMap({ permits, jurisdictions, selectedId, onSelec
       className="h-[32rem] w-full rounded-lg border border-gray-200 dark:border-gray-700"
     >
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        // A dark basemap so the map reads as part of the app's black/green
+        // theme instead of a light-gray box sitting in an otherwise dark
+        // page. CartoDB's free "dark matter" tiles are the standard choice
+        // for this (no API key required).
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        subdomains="abcd"
         noWrap
       />
       <SyncMapSize />

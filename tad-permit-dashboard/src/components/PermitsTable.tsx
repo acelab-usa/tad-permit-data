@@ -41,7 +41,7 @@ export default function PermitsTable({ permits, selectedId, onSelect }: PermitsT
   return (
     <div className="max-h-[32rem] overflow-y-auto overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[var(--chart-surface)] shadow-sm">
       <table className="min-w-full text-sm">
-        <thead className="bg-gray-50 dark:bg-gray-800/60 sticky top-0 z-10">
+        <thead className="bg-gray-100 dark:bg-gray-800 sticky top-0 z-10">
           <tr>
             {COLUMNS.map((col) => (
               <th
