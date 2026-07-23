@@ -22,10 +22,10 @@ export default function MetricsRow({ permits }: { permits: Permit[] }) {
       {stats.map((stat) => (
         <div
           key={stat.label}
-          className="rounded-lg border border-gray-200 dark:border-gray-700 p-3"
+          className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[var(--chart-surface)] shadow-sm p-4"
         >
-          <div className="text-xs text-gray-500 dark:text-gray-400">{stat.label}</div>
-          <div className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+          <div className="text-xs font-medium text-gray-500 dark:text-gray-400">{stat.label}</div>
+          <div className="mt-1 text-2xl font-semibold text-gray-900 dark:text-gray-100">
             {stat.value}
           </div>
         </div>

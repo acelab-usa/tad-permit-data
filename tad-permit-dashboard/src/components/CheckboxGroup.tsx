@@ -31,20 +31,20 @@ export default function CheckboxGroup({
           <button
             type="button"
             onClick={() => onChange(new Set(options))}
-            className="text-blue-600 dark:text-blue-400 hover:underline"
+            className="text-[var(--accent)] hover:underline"
           >
             All
           </button>
           <button
             type="button"
             onClick={() => onChange(new Set())}
-            className="text-blue-600 dark:text-blue-400 hover:underline"
+            className="text-[var(--accent)] hover:underline"
           >
             None
           </button>
         </div>
       </div>
-      <div className="max-h-40 overflow-y-auto rounded border border-gray-200 dark:border-gray-700 p-2 space-y-1">
+      <div className="max-h-40 overflow-y-auto rounded-md border border-gray-200 dark:border-gray-700 p-2 space-y-1">
         {options.map((option) => (
           <label
             key={option}
@@ -54,7 +54,7 @@ export default function CheckboxGroup({
               type="checkbox"
               checked={selected.has(option)}
               onChange={() => toggle(option)}
-              className="rounded border-gray-300"
+              className="rounded border-gray-300 accent-[var(--accent)]"
             />
             <span className="text-gray-800 dark:text-gray-100">{option}</span>
           </label>
