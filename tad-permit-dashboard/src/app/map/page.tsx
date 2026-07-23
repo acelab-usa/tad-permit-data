@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import Filters from "@/components/Filters";
-import NavTabs from "@/components/NavTabs";
 import PermitDetail from "@/components/PermitDetail";
 import { usePermits } from "@/lib/usePermits";
 import { REGISTERED_JURISDICTIONS } from "@/lib/jurisdictions";
@@ -38,7 +37,7 @@ export default function MapPage() {
 
   return (
     <div className="min-h-screen p-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
           🗺️ Permit Map
         </h1>
@@ -49,10 +48,6 @@ export default function MapPage() {
         >
           🔄 Refresh data
         </button>
-      </div>
-
-      <div className="mb-6">
-        <NavTabs />
       </div>
 
       {error && (

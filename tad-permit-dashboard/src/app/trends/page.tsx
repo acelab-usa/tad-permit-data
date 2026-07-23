@@ -1,16 +1,14 @@
 "use client";
 
 import Filters from "@/components/Filters";
-import NavTabs from "@/components/NavTabs";
 import ChartCard from "@/components/charts/ChartCard";
-import TrendLineChart from "@/components/charts/TrendLineChart";
 import HorizontalBarChart from "@/components/charts/HorizontalBarChart";
 import { usePermits } from "@/lib/usePermits";
 import { REGISTERED_JURISDICTIONS } from "@/lib/jurisdictions";
 import {
   countByPermitType,
   formatCompactCurrency,
-  permitsByMonth,
+  topContractors,
   valuationByJurisdiction,
 } from "@/lib/trends";
 
@@ -18,13 +16,13 @@ export default function TrendsPage() {
   const { permits, error, filters, setFilters, jurisdictionOptions, permitTypeOptions, valuationBounds, filtered, refresh } =
     usePermits();
 
-  const monthly = permitsByMonth(filtered);
   const byJurisdiction = valuationByJurisdiction(filtered);
   const byType = countByPermitType(filtered);
+  const byContractor = topContractors(filtered);
 
   return (
     <div className="min-h-screen p-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">📈 Permit Trends</h1>
         <button
           type="button"
@@ -33,10 +31,6 @@ export default function TrendsPage() {
         >
           🔄 Refresh data
         </button>
-      </div>
-
-      <div className="mb-6">
-        <NavTabs />
       </div>
 
       {error && (
@@ -68,15 +62,6 @@ export default function TrendsPage() {
             />
 
             <main className="flex-1 min-w-0 space-y-6">
-              <ChartCard
-                title="Permits filed over time"
-                subtitle="Monthly count across the current filter selection"
-                tableColumns={["Month", "Permits"]}
-                tableRows={monthly.map((d) => ({ label: d.label, value: d.value.toLocaleString("en-US") }))}
-              >
-                <TrendLineChart data={monthly} />
-              </ChartCard>
-
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <ChartCard
                   title="Valuation by jurisdiction"
@@ -104,6 +89,19 @@ export default function TrendsPage() {
                   />
                 </ChartCard>
               </div>
+
+              <ChartCard
+                title="Top contractors"
+                subtitle="Most active contractors by permit count, current filter selection"
+                tableColumns={["Contractor", "Permits"]}
+                tableRows={byContractor.map((d) => ({ label: d.label, value: d.value.toLocaleString("en-US") }))}
+              >
+                <HorizontalBarChart
+                  data={byContractor}
+                  valueFormat={(v) => v.toLocaleString("en-US")}
+                  ariaLabel="Permit count by contractor"
+                />
+              </ChartCard>
             </main>
           </div>
         )

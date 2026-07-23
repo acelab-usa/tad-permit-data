@@ -5,34 +5,6 @@ export interface DataPoint {
   value: number;
 }
 
-const MONTH_LABELS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-// Buckets by calendar month (YYYY-MM) and returns points in chronological
-// order. Permits with no filing_date are excluded -- there's no time axis
-// position for them.
-export function permitsByMonth(permits: Permit[]): DataPoint[] {
-  const counts = new Map<string, number>();
-
-  for (const p of permits) {
-    if (!p.filing_date) continue;
-    const key = p.filing_date.slice(0, 7); // "YYYY-MM"
-    if (key.length !== 7) continue;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-
-  return Array.from(counts.keys())
-    .sort()
-    .map((key) => {
-      const [year, month] = key.split("-");
-      const monthIndex = Number(month) - 1;
-      const label = `${MONTH_LABELS[monthIndex] ?? month} ${year}`;
-      return { label, value: counts.get(key)! };
-    });
-}
-
 // Sums valuation per jurisdiction, descending -- a permit missing
 // valuation contributes to the count elsewhere but not to this sum.
 export function valuationByJurisdiction(permits: Permit[]): DataPoint[] {
@@ -61,6 +33,25 @@ export function countByPermitType(permits: Permit[]): DataPoint[] {
   return Array.from(counts.entries())
     .map(([label, value]) => ({ label, value }))
     .sort((a, b) => b.value - a.value);
+}
+
+// Top contractors by permit count -- a leaderboard, not a full breakdown,
+// so unlike countByPermitType there's no "Unspecified" bucket or full
+// tail: permits with no contractor_name are simply not a contractor to
+// rank, and only the top `limit` are returned.
+export function topContractors(permits: Permit[], limit = 8): DataPoint[] {
+  const counts = new Map<string, number>();
+
+  for (const p of permits) {
+    const name = p.contractor_name?.trim();
+    if (!name) continue;
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+
+  return Array.from(counts.entries())
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, limit);
 }
 
 export function formatCompactNumber(value: number): string {

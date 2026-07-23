@@ -1,35 +1,31 @@
 "use client";
 
-import { useState } from "react";
 import Filters from "@/components/Filters";
 import MetricsRow from "@/components/MetricsRow";
-import NavTabs from "@/components/NavTabs";
-import PermitsTable from "@/components/PermitsTable";
-import PermitDetail from "@/components/PermitDetail";
+import RecentPermitsList from "@/components/RecentPermitsList";
+import ChartCard from "@/components/charts/ChartCard";
+import HorizontalBarChart from "@/components/charts/HorizontalBarChart";
 import { usePermits } from "@/lib/usePermits";
 import { REGISTERED_JURISDICTIONS } from "@/lib/jurisdictions";
-import type { Permit } from "@/lib/types";
+import {
+  countByPermitType,
+  formatCompactCurrency,
+  topContractors,
+  valuationByJurisdiction,
+} from "@/lib/trends";
 
-export default function Home() {
-  const {
-    permits,
-    error,
-    filters,
-    setFilters,
-    jurisdictionOptions,
-    permitTypeOptions,
-    valuationBounds,
-    filtered,
-    refresh,
-  } = usePermits();
-  const [selected, setSelected] = useState<Permit | null>(null);
+export default function OverviewPage() {
+  const { permits, error, filters, setFilters, jurisdictionOptions, permitTypeOptions, valuationBounds, filtered, refresh } =
+    usePermits();
+
+  const byJurisdiction = valuationByJurisdiction(filtered);
+  const byType = countByPermitType(filtered);
+  const byContractor = topContractors(filtered, 5);
 
   return (
     <div className="min-h-screen p-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-          🏗️ Permit Lookup
-        </h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">📊 Overview</h1>
         <button
           type="button"
           onClick={refresh}
@@ -37,10 +33,6 @@ export default function Home() {
         >
           🔄 Refresh data
         </button>
-      </div>
-
-      <div className="mb-6">
-        <NavTabs />
       </div>
 
       {error && (
@@ -73,17 +65,50 @@ export default function Home() {
 
             <main className="flex-1 min-w-0 space-y-6">
               <MetricsRow permits={filtered} />
-              <PermitsTable
-                permits={filtered}
-                selectedId={selected?.id ?? null}
-                onSelect={setSelected}
-              />
-              <section>
-                <h2 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">
-                  Permit detail
-                </h2>
-                <PermitDetail permit={selected} />
-              </section>
+
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Top cuts shown below — see the Trends page for full breakdowns.
+              </p>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <ChartCard
+                  title="Valuation by jurisdiction"
+                  tableColumns={["Jurisdiction", "Total valuation"]}
+                  tableRows={byJurisdiction.map((d) => ({ label: d.label, value: formatCompactCurrency(d.value) }))}
+                >
+                  <HorizontalBarChart
+                    data={byJurisdiction}
+                    valueFormat={formatCompactCurrency}
+                    ariaLabel="Total permit valuation by jurisdiction"
+                  />
+                </ChartCard>
+
+                <ChartCard
+                  title="Permit type distribution"
+                  tableColumns={["Permit type", "Count"]}
+                  tableRows={byType.map((d) => ({ label: d.label, value: d.value.toLocaleString("en-US") }))}
+                >
+                  <HorizontalBarChart
+                    data={byType.slice(0, 6)}
+                    valueFormat={(v) => v.toLocaleString("en-US")}
+                    ariaLabel="Permit count by normalized type"
+                  />
+                </ChartCard>
+
+                <ChartCard
+                  title="Top contractors"
+                  tableColumns={["Contractor", "Permits"]}
+                  tableRows={byContractor.map((d) => ({ label: d.label, value: d.value.toLocaleString("en-US") }))}
+                >
+                  <HorizontalBarChart
+                    data={byContractor}
+                    valueFormat={(v) => v.toLocaleString("en-US")}
+                    ariaLabel="Permit count by contractor"
+                  />
+                </ChartCard>
+              </div>
+
+              <RecentPermitsList permits={filtered} />
             </main>
           </div>
         )
