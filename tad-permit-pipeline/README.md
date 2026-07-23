@@ -17,8 +17,8 @@ The pipeline is intentionally decoupled into separate layers to maintain high co
 * **`sources/`**: The **Jurisdiction Adapter Layer**. Every city/authority the pipeline ingests is a small adapter registered in `sources/registry.py` — a `SocrataAPISource` or `ArcGISFeatureSource` (one API record = one permit, via a `FieldMapping`) or a `PDFLedgerSource` (one PDF page = zero-or-more permits, via LLM extraction). See "Adding a New Jurisdiction" below.
 * **`database.py`**: The **Storage Engine Layer**. Handles the SQLite connection lifecycle, database creation scripts, and standard SQL validation rules.
 * **`llm_processor.py`**: The **AI Engine Layer**. Manages structured inference requests to OpenRouter models (such as Gemini 2.5 Flash), with retry/backoff on transient failures.
-* **`dataloader.py`**: The **Ingestion Orchestrator**. Looks up the requested jurisdiction's adapter, fetches/maps records, and pushes events to the background workflow.
-* **`workflow.py`**: The **Hatchet Worker Layer**. Listens for workflow events and manages concurrent, resilient data enrichment and database writes.
+* **`dataloader.py`**: The **Ingestion Orchestrator**. Looks up the requested jurisdiction's adapter, fetches/maps records, and pushes *batched* events to the background workflow -- see "Hatchet Event Batching" below.
+* **`workflow.py`**: The **Hatchet Worker Layer**. Listens for batched workflow events and manages concurrent, resilient data enrichment and database writes.
 * **`../tad-permit-dashboard/`** (sibling project): The **Lookup UI Layer**. A read-only Next.js app for searching/filtering the unified `permits` table -- reads `permits.db` directly, no separate API server. See its own README for setup.
 * **`logging_setup.py`**: Shared logging config (console + rotating `pipeline.log` file) used by every module above instead of ad-hoc `print()` calls.
 * **`eval/`**: The **Quality Eval Layer**. Scores `llm_processor.py`'s live output against hand-labeled golden cases to catch extraction/enrichment quality regressions. See `eval/README.md`.
@@ -165,6 +165,16 @@ uv run python dataloader.py allen --size 100   # PDF ledger ingestion
 ```
 
 Ingestion failures (bad records, DB conflicts, an unreachable API, an offline worker) are logged to the console and to `pipeline.log` and skip only the affected record — they don't stop the batch.
+
+### Hatchet Event Batching
+
+Hatchet event volume is decoupled from data volume, which matters if you're on a plan with an event/run limit and want to run ingestion on a schedule rather than by hand:
+
+* **API sources** (Chicago/NYC/Austin/Seattle/LA/DC): every newly-inserted permit from one `dataloader.py` run is collected and pushed as a single `permit:enrich_batch` event (chunked at `ENRICH_BATCH_SIZE` permits per event, purely a payload-size margin) instead of one `permit:enrich` event per permit. Duplicate/already-ingested permits never trigger an event at all (`INSERT OR IGNORE` + a `was_inserted` check), so a scheduled re-run's event cost scales with *new* permits only, not the `--size` fetched.
+* **PDF sources** (Allen/Naperville): every page queued for one file goes out as a single `pdf:process_batch` event instead of one event per page -- a 96-page monthly ledger costs 1 event, not 96.
+* **PDF resumable cursor**: `PDFLedgerSource.iter_pages()` resumes from the last page it successfully queued (tracked in the `ingestion_cursors` table, via `database.get_pdf_cursor()`/`update_pdf_cursor()`) instead of always restarting at page 1 of the first file. Without this, a repeated run -- scheduled or just re-run by hand -- would re-read and re-queue an event for the exact same pages every time, since there was previously no memory of prior progress at all. The cursor advances only after a batch is *successfully* pushed, so a failed Hatchet push gets retried next run rather than silently skipped.
+
+See `tests/test_dataloader.py`, `tests/test_workflow.py`, `tests/test_pdf_ledger.py`, and `tests/test_database_cursor.py` for coverage of the batching and resume behavior.
 
 ### Step 3: Browse & Search Permits
 The lookup dashboard lives in the sibling `tad-permit-dashboard/` Next.js project (reads `permits.db` directly, no ingestion changes needed). See `../tad-permit-dashboard/README.md`, or briefly:

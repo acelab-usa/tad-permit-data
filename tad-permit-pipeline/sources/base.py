@@ -41,5 +41,15 @@ class PDFPermitSource(PermitSource):
     extraction_hints: str | None = None
 
     @abstractmethod
-    def iter_pages(self, month_cap: int = 1, page_cap: int | None = None) -> Iterable[tuple[str, int, str]]:
-        """Yield (source_file_name, page_number, page_text) tuples to enqueue."""
+    def iter_pages(
+        self,
+        month_cap: int = 1,
+        page_cap: int | None = None,
+        start_filename: str | None = None,
+        start_page: int = 0,
+    ) -> Iterable[tuple[str, int, str]]:
+        """Yield (source_file_name, page_number, page_text) tuples to enqueue.
+
+        `start_filename`/`start_page` resume from a prior run's progress
+        (see database.get_pdf_cursor()) instead of restarting from the
+        first file's page 1 every time."""

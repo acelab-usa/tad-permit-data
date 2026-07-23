@@ -7,6 +7,13 @@ PDF workflow for LLM extraction (PDF sources, one page = many permits).
 
 Adding a new jurisdiction never requires touching this file -- register an
 adapter in sources/registry.py instead.
+
+Hatchet events are pushed in batches, not one per permit/page: every newly
+inserted API permit from a single run goes into one (or a few, chunked)
+`permit:enrich_batch` events, and every page queued for one PDF file goes
+into a single `pdf:process_batch` event. This decouples Hatchet event
+volume from data volume -- a run that inserts 100 new permits or queues 96
+ledger pages costs a handful of events, not 100 or 96.
 """
 import argparse
 
@@ -25,6 +32,16 @@ logger = get_logger("dataloader")
 
 hatchet = Hatchet()
 
+# Caps how many permits' worth of enrichment work rides in a single
+# Hatchet event -- purely a payload-size safety margin, not a quota
+# concern (a run's permits still go out in as few events as this allows).
+ENRICH_BATCH_SIZE = 25
+
+
+def _chunks(items: list, size: int):
+    for i in range(0, len(items), size):
+        yield items[i:i + size]
+
 
 def _ingest_api_source(source: APIPermitSource, size: int):
     raw_records = source.fetch_raw_records(size=size)
@@ -33,6 +50,7 @@ def _ingest_api_source(source: APIPermitSource, size: int):
         return
 
     inserted = skipped = failed = 0
+    to_enrich = []
 
     for raw_item in raw_records:
         try:
@@ -77,19 +95,23 @@ def _ingest_api_source(source: APIPermitSource, size: int):
 
         inserted += 1
         logger.info("%s: saved permit %s (%s)", source.name, validated_permit.permit_id, validated_permit.address)
+        to_enrich.append({"permit_id": validated_permit.permit_id, "raw_text": validated_permit.raw_scope_of_work})
 
+    queued_events = 0
+    for batch in _chunks(to_enrich, ENRICH_BATCH_SIZE):
         try:
-            hatchet.event.push(
-                "permit:enrich",
-                {"permit_id": validated_permit.permit_id, "raw_text": validated_permit.raw_scope_of_work},
-            )
+            hatchet.event.push("permit:enrich_batch", {"permits": batch})
+            queued_events += 1
         except Exception as e:
             logger.warning(
-                "%s: permit %s saved but enrichment could not be queued (is the Hatchet worker running?): %s",
-                source.name, validated_permit.permit_id, e,
+                "%s: %s permit(s) saved but enrichment could not be queued (is the Hatchet worker running?): %s",
+                source.name, len(batch), e,
             )
 
-    logger.info("%s: ingestion complete -- inserted=%s skipped=%s failed=%s", source.name, inserted, skipped, failed)
+    logger.info(
+        "%s: ingestion complete -- inserted=%s skipped=%s failed=%s, enrichment queued in %s event(s) for %s permit(s)",
+        source.name, inserted, skipped, failed, queued_events, len(to_enrich),
+    )
 
 
 def _ingest_pdf_source(source: PDFPermitSource, size: int):
@@ -98,27 +120,53 @@ def _ingest_pdf_source(source: PDFPermitSource, size: int):
     page_cap = max(1, size // 5) if size else None
     month_cap = 1
 
-    queued = 0
-    for filename, page_number, page_text in source.iter_pages(month_cap=month_cap, page_cap=page_cap):
+    start_filename, start_page = database.get_pdf_cursor(source.name)
+
+    queued_pages = 0
+    queued_events = 0
+    current_filename = None
+    current_batch = []
+    last_page_seen = 0
+
+    def _flush():
+        nonlocal current_batch, queued_events, last_page_seen
+        if not current_batch:
+            return
         try:
             hatchet.event.push(
-                "pdf:process",
+                "pdf:process_batch",
                 {
                     "jurisdiction": source.name,
-                    "source_pdf_name": filename,
-                    "page_number": page_number,
-                    "page_text": page_text,
+                    "source_pdf_name": current_filename,
+                    "pages": current_batch,
                     "extraction_hints": source.extraction_hints,
                 },
             )
-            queued += 1
+            queued_events += 1
+            # Advance the cursor only once the batch is actually queued --
+            # if the push above fails, the next run retries these same
+            # pages rather than silently skipping them.
+            database.update_pdf_cursor(source.name, current_filename, last_page_seen)
         except Exception as e:
             logger.error(
-                "%s: failed to queue page %s of '%s' (is the Hatchet worker running?): %s",
-                source.name, page_number, filename, e,
+                "%s: failed to queue %s page(s) of '%s' (is the Hatchet worker running?): %s",
+                source.name, len(current_batch), current_filename, e,
             )
+        current_batch = []
 
-    logger.info("%s: queued %s ledger pages for processing", source.name, queued)
+    for filename, page_number, page_text in source.iter_pages(
+        month_cap=month_cap, page_cap=page_cap, start_filename=start_filename, start_page=start_page
+    ):
+        if filename != current_filename:
+            _flush()
+            current_filename = filename
+        current_batch.append({"page_number": page_number, "page_text": page_text})
+        last_page_seen = page_number
+        queued_pages += 1
+
+    _flush()
+
+    logger.info("%s: queued %s ledger page(s) across %s event(s)", source.name, queued_pages, queued_events)
 
 
 def load_data(jurisdiction: str = "chicago", size: int = 100):
