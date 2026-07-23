@@ -2,7 +2,6 @@
 
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
-import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import L from "leaflet";
 import "leaflet.markercluster";
 import { useEffect, useRef } from "react";
@@ -91,13 +90,36 @@ function formatValuation(value: number | null): string {
 // (unlike the CircleMarker/SVG-path layer used before, which
 // leaflet.markercluster doesn't support -- it only clusters L.Marker-like
 // layers).
+//
+// A solid-fill dot with a light ring (rather than the same-color
+// half-opacity border the first version used) reads with real contrast
+// against the dark basemap regardless of hue, and a drop shadow gives it
+// depth instead of looking like a flat sticker. Selected state swaps the
+// ring to the brand accent instead of just growing the dot.
 function markerIcon(color: string, isSelected: boolean): L.DivIcon {
-  const size = isSelected ? 18 : 12;
-  const border = isSelected ? 3 : 1;
-  const opacity = isSelected ? 0.9 : 0.6;
+  const size = isSelected ? 14 : 10;
+  const ringWidth = isSelected ? 3 : 2;
+  const ringColor = isSelected ? "var(--accent)" : "rgba(245, 244, 238, 0.85)";
+  const total = size + ringWidth * 2;
   return L.divIcon({
     className: "",
-    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${color};opacity:${opacity};border:${border}px solid ${color};box-sizing:content-box;"></div>`,
+    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${color};border:${ringWidth}px solid ${ringColor};box-shadow:0 1px 6px rgba(0,0,0,0.7);box-sizing:content-box;"></div>`,
+    iconSize: [total, total],
+    iconAnchor: [total / 2, total / 2],
+  });
+}
+
+// Replaces leaflet.markercluster's own default look (a two-tone
+// yellow/orange/green ring, unchanged since the plugin's original 2012
+// release) with a dark pill in the brand accent, sized in the same
+// small/medium/large tiers the plugin uses.
+function clusterIcon(cluster: { getChildCount: () => number }): L.DivIcon {
+  const count = cluster.getChildCount();
+  const size = count < 10 ? 32 : count < 100 ? 40 : 48;
+  const fontSize = count < 100 ? 13 : 12;
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:var(--chart-surface);border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:700;font-size:${fontSize}px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;box-shadow:0 2px 10px rgba(0,0,0,0.7);">${count}</div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
@@ -126,7 +148,7 @@ function ClusteredMarkers({ permits, jurisdictions, selectedId, onSelect }: Perm
   const jurisdictionKey = jurisdictions.join(",");
 
   useEffect(() => {
-    const clusterGroup = L.markerClusterGroup({ maxClusterRadius: 60 });
+    const clusterGroup = L.markerClusterGroup({ maxClusterRadius: 60, iconCreateFunction: clusterIcon });
     const markersById = new Map<number, L.Marker>();
 
     permits.forEach((permit) => {
