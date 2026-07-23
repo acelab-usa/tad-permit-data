@@ -1,8 +1,6 @@
 "use client";
 
-import Filters from "@/components/Filters";
 import MetricsRow from "@/components/MetricsRow";
-import RecentPermitsList from "@/components/RecentPermitsList";
 import ChartCard from "@/components/charts/ChartCard";
 import HorizontalBarChart from "@/components/charts/HorizontalBarChart";
 import { usePermits } from "@/lib/usePermits";
@@ -14,16 +12,19 @@ import {
   valuationByJurisdiction,
 } from "@/lib/trends";
 
+// Overview is a pure at-a-glance summary -- unfiltered, no Filters sidebar,
+// no permit-level table. Slicing the data is what /table, /map, and
+// /trends are for; this page just answers "what's the state of things."
 export default function OverviewPage() {
-  const { permits, error, filters, setFilters, jurisdictionOptions, permitTypeOptions, valuationBounds, filtered, refresh } =
-    usePermits();
+  const { permits, error, refresh } = usePermits();
+  const allPermits = permits ?? [];
 
-  const byJurisdiction = valuationByJurisdiction(filtered);
-  const byType = countByPermitType(filtered);
-  const byContractor = topContractors(filtered, 5);
+  const byJurisdiction = valuationByJurisdiction(allPermits);
+  const byType = countByPermitType(allPermits);
+  const byContractor = topContractors(allPermits, 5);
 
   return (
-    <div className="min-h-screen p-6 max-w-7xl mx-auto">
+    <div className="min-h-screen p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">📊 Overview</h1>
         <button
@@ -53,65 +54,51 @@ export default function OverviewPage() {
           in tad-permit-pipeline, then refresh.
         </p>
       ) : (
-        filters && (
-          <div className="flex flex-col lg:flex-row gap-6">
-            <Filters
-              jurisdictionOptions={jurisdictionOptions}
-              permitTypeOptions={permitTypeOptions}
-              valuationBounds={valuationBounds}
-              filters={filters}
-              onChange={setFilters}
-            />
+        <div className="space-y-6">
+          <MetricsRow permits={allPermits} />
 
-            <main className="flex-1 min-w-0 space-y-6">
-              <MetricsRow permits={filtered} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <ChartCard
+              title="Valuation by jurisdiction"
+              tableColumns={["Jurisdiction", "Total valuation"]}
+              tableRows={byJurisdiction.map((d) => ({ label: d.label, value: formatCompactCurrency(d.value) }))}
+            >
+              <HorizontalBarChart
+                data={byJurisdiction}
+                valueFormat={formatCompactCurrency}
+                ariaLabel="Total permit valuation by jurisdiction"
+              />
+            </ChartCard>
 
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Top cuts shown below — see the Trends page for full breakdowns.
-              </p>
+            <ChartCard
+              title="Permit type distribution"
+              tableColumns={["Permit type", "Count"]}
+              tableRows={byType.map((d) => ({ label: d.label, value: d.value.toLocaleString("en-US") }))}
+            >
+              <HorizontalBarChart
+                data={byType.slice(0, 6)}
+                valueFormat={(v) => v.toLocaleString("en-US")}
+                ariaLabel="Permit count by normalized type"
+              />
+            </ChartCard>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <ChartCard
-                  title="Valuation by jurisdiction"
-                  tableColumns={["Jurisdiction", "Total valuation"]}
-                  tableRows={byJurisdiction.map((d) => ({ label: d.label, value: formatCompactCurrency(d.value) }))}
-                >
-                  <HorizontalBarChart
-                    data={byJurisdiction}
-                    valueFormat={formatCompactCurrency}
-                    ariaLabel="Total permit valuation by jurisdiction"
-                  />
-                </ChartCard>
-
-                <ChartCard
-                  title="Permit type distribution"
-                  tableColumns={["Permit type", "Count"]}
-                  tableRows={byType.map((d) => ({ label: d.label, value: d.value.toLocaleString("en-US") }))}
-                >
-                  <HorizontalBarChart
-                    data={byType.slice(0, 6)}
-                    valueFormat={(v) => v.toLocaleString("en-US")}
-                    ariaLabel="Permit count by normalized type"
-                  />
-                </ChartCard>
-
-                <ChartCard
-                  title="Top contractors"
-                  tableColumns={["Contractor", "Permits"]}
-                  tableRows={byContractor.map((d) => ({ label: d.label, value: d.value.toLocaleString("en-US") }))}
-                >
-                  <HorizontalBarChart
-                    data={byContractor}
-                    valueFormat={(v) => v.toLocaleString("en-US")}
-                    ariaLabel="Permit count by contractor"
-                  />
-                </ChartCard>
-              </div>
-
-              <RecentPermitsList permits={filtered} />
-            </main>
+            <ChartCard
+              title="Top contractors"
+              tableColumns={["Contractor", "Permits"]}
+              tableRows={byContractor.map((d) => ({ label: d.label, value: d.value.toLocaleString("en-US") }))}
+            >
+              <HorizontalBarChart
+                data={byContractor}
+                valueFormat={(v) => v.toLocaleString("en-US")}
+                ariaLabel="Permit count by contractor"
+              />
+            </ChartCard>
           </div>
-        )
+
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Unfiltered, all jurisdictions — filter and drill down on Table, Map, or Trends.
+          </p>
+        </div>
       )}
     </div>
   );
