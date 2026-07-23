@@ -10,6 +10,7 @@ need nothing more than that (see `seattle` below). Only reach for a custom
 `scope_builder` (see `nyc` below) when a field genuinely can't be expressed
 as "rename this column" or "try these columns in order."
 """
+from sources.arcgis import ArcGISFeatureSource
 from sources.field_mapping import FieldMapping, build_mapper
 from sources.pdf_ledger import PDFLedgerSource
 from sources.socrata import SocrataAPISource
@@ -152,6 +153,39 @@ LA_MAPPING = FieldMapping(
 )
 
 
+# Added from a real onboard_jurisdiction.py run against DC's ArcGIS
+# FeatureServer layer 17, then reviewed by hand -- the first jurisdiction
+# onboarded through that tool. Two things the LLM's draft got wrong, caught
+# by checking the full field list rather than trusting the draft: it
+# proposed FEES_PAID for valuation_field, but this dataset has no real
+# cost/valuation field at all (FEE_TYPE/FEES_PAID are the processing fee,
+# not the project's reported cost -- a fee of $36 does not mean a $36
+# project) -- left unmapped rather than storing a systematically wrong
+# number. No square footage field exists either.
+#
+# permit_type_fields' "Other" cases are a genuine no-signal situation, not
+# a taxonomy gap: DC's "Post Card" (fast-track) permits all show
+# PERMIT_SUBTYPE_NAME="BUILDING" regardless of actual scope (a deck, a
+# fence, an interior demo) -- too generic to safely map to any one
+# category without misclassifying the others that share the same value.
+#
+# No point_fields needed -- FULL_ADDRESS already includes city/state/zip,
+# and coordinates come from ArcGISFeatureSource's geometry flattening
+# (this layer also happens to expose plain LATITUDE/LONGITUDE attribute
+# fields, redundant with the geometry).
+DC_MAPPING = FieldMapping(
+    jurisdiction="dc",
+    source_url="https://maps2.dcgis.dc.gov/dcgis/rest/services/FEEDS/DCRA/FeatureServer/17",
+    permit_id_field="PERMIT_ID",
+    address_fields=("FULL_ADDRESS",),
+    date_fields=("ISSUE_DATE",),
+    owner_name_fields=("OWNER_NAME",),
+    contractor_name_fields=("PERMIT_APPLICANT",),
+    permit_type_fields=("PERMIT_TYPE_NAME", "PERMIT_SUBTYPE_NAME", "PERMIT_CATEGORY_NAME"),
+    scope_fields=("DESC_OF_WORK",),
+)
+
+
 SOURCES = {
     "chicago": SocrataAPISource(
         name="chicago",
@@ -184,6 +218,12 @@ SOURCES = {
         url="https://data.lacity.org/api/v3/views/xnhu-aczu/query.json",
         date_column="issue_date",
         mapper_func=build_mapper(LA_MAPPING),
+    ),
+    "dc": ArcGISFeatureSource(
+        name="dc",
+        url="https://maps2.dcgis.dc.gov/dcgis/rest/services/FEEDS/DCRA/FeatureServer/17",
+        date_column="ISSUE_DATE",
+        mapper_func=build_mapper(DC_MAPPING),
     ),
     "allen": PDFLedgerSource(
         name="allen",

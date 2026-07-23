@@ -20,6 +20,7 @@ from sources.field_mapping import _safe_date as safe_date, build_mapper
 from sources.registry import (
     AUSTIN_MAPPING,
     CHICAGO_MAPPING,
+    DC_MAPPING,
     LA_MAPPING,
     NYC_MAPPING,
     SEATTLE_MAPPING,
@@ -337,6 +338,77 @@ class LaMappingTests(unittest.TestCase):
         self.assertIsNone(mapped["square_footage"])
         self.assertIsNone(mapped["filing_date"])
         self.assertEqual(mapped["address"], "1 MAIN")
+
+
+class DcMappingTests(unittest.TestCase):
+    """DC is new (no prior implementation to diff against) and the first
+    jurisdiction onboarded via onboard_jurisdiction.py against an ArcGIS
+    source rather than Socrata. Uses a real sample record from that run
+    (already flattened -- plain latitude/longitude, as
+    sources.arcgis._flatten_feature would produce from the layer's point
+    geometry after the outSR=4326 fix)."""
+
+    def test_real_sample_record(self):
+        raw_item = {
+            "PERMIT_ID": "G15775960",
+            "ISSUE_DATE": "2025-03-25T00:00:00.000",
+            "FULL_ADDRESS": "1867 PARK RD NW, WASHINGTON, DC 20010",
+            "OWNER_NAME": "MATCAP   LLC",
+            "PERMIT_APPLICANT": "JOHNNY  DE LA CRUZ; MATCAP  LLC; CARLOS  MONTES",
+            "PERMIT_TYPE_NAME": "SUPPLEMENTAL",
+            "PERMIT_SUBTYPE_NAME": "PLUMBING",
+            "PERMIT_CATEGORY_NAME": "NA",
+            "FEES_PAID": "218.00",
+            "DESC_OF_WORK": (
+                "This supplemental permit was issued online. Use the Online Permit "
+                "View application on DCRA Intranet to view the details and print a "
+                "copy of the permit."
+            ),
+            "latitude": 38.93274963117554,
+            "longitude": -77.04356451031826,
+        }
+        mapped = build_mapper(DC_MAPPING)(raw_item)
+
+        self.assertEqual(mapped["permit_id"], "G15775960")
+        self.assertEqual(mapped["jurisdiction"], "dc")
+        self.assertEqual(mapped["address"], "1867 PARK RD NW, WASHINGTON, DC 20010")
+        self.assertEqual(mapped["filing_date"].isoformat(), "2025-03-25")
+        self.assertEqual(mapped["owner_name"], "MATCAP   LLC")
+        # valuation_field is deliberately unset -- FEES_PAID is a processing
+        # fee, not the project's reported cost, and this dataset has no
+        # real cost/valuation field at all.
+        self.assertIsNone(mapped["valuation"])
+        self.assertIsNone(mapped["square_footage"])
+        self.assertEqual(mapped["permit_type_raw"], "SUPPLEMENTAL")
+        self.assertIn(mapped["permit_type_normalized"], PERMIT_TYPE_TAXONOMY)
+        self.assertEqual(mapped["permit_type_normalized"], "Plumbing")
+        self.assertAlmostEqual(mapped["latitude"], 38.93274963117554)
+        self.assertAlmostEqual(mapped["longitude"], -77.04356451031826)
+
+    def test_post_card_permits_honestly_fall_to_other(self):
+        # DC's "Post Card" fast-track permits all show
+        # PERMIT_SUBTYPE_NAME="BUILDING" regardless of actual scope (a
+        # deck, a fence, an interior demo) -- too generic to map to any one
+        # taxonomy category without misclassifying the others sharing this
+        # same value. "Other" here is the correct, honest outcome, not a
+        # bug -- the real work detail only lives in free-text DESC_OF_WORK,
+        # deliberately not fed into normalize_permit_type().
+        mapped = build_mapper(DC_MAPPING)({
+            "PERMIT_ID": "PC14879195",
+            "PERMIT_TYPE_NAME": "POST CARD",
+            "PERMIT_SUBTYPE_NAME": "BUILDING",
+            "PERMIT_CATEGORY_NAME": "NA",
+            "DESC_OF_WORK": "Interior demolition of non-bearing elements in a space up to 5,000 square feet.",
+        })
+        self.assertEqual(mapped["permit_type_normalized"], "Other")
+
+    def test_missing_optional_fields(self):
+        mapped = build_mapper(DC_MAPPING)({"PERMIT_ID": "X", "FULL_ADDRESS": "1 Main St"})
+        self.assertEqual(mapped["permit_type_raw"], "UNKNOWN")
+        self.assertEqual(mapped["permit_type_normalized"], "Other")
+        self.assertIsNone(mapped["valuation"])
+        self.assertIsNone(mapped["owner_name"])
+        self.assertIsNone(mapped["filing_date"])
 
 
 class SafeDateTests(unittest.TestCase):
