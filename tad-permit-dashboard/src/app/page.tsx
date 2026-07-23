@@ -30,7 +30,7 @@ export default function OverviewPage() {
         <button
           type="button"
           onClick={refresh}
-          className="rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          className="rounded-lg bg-[var(--accent)] text-black font-medium px-3 py-1.5 text-sm hover:brightness-95 transition-[filter]"
         >
           🔄 Refresh data
         </button>

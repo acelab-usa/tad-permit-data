@@ -12,19 +12,21 @@ export default function MetricsRow({ permits }: { permits: Permit[] }) {
   const avgValuation = valuations.length > 0 ? totalValuation / valuations.length : null;
 
   const stats = [
-    { label: "Permits matched", value: permits.length.toLocaleString("en-US"), icon: "📄" },
-    { label: "Jurisdictions", value: jurisdictionCount.toString(), icon: "🏙️" },
+    { label: "Permits matched", value: permits.length.toLocaleString("en-US"), icon: "📄", chip: "bg-[var(--accent-wash)]" },
+    { label: "Jurisdictions", value: jurisdictionCount.toString(), icon: "🏙️", chip: "bg-sky-400/15" },
     {
       label: "Total valuation",
       value: formatCompactCurrency(totalValuation),
       title: formatCurrency(totalValuation),
       icon: "💰",
+      chip: "bg-amber-400/15",
     },
     {
       label: "Avg valuation",
       value: avgValuation !== null ? formatCompactCurrency(avgValuation) : "N/A",
       title: avgValuation !== null ? formatCurrency(avgValuation) : undefined,
       icon: "📊",
+      chip: "bg-violet-400/15",
     },
   ];
 
@@ -33,19 +35,19 @@ export default function MetricsRow({ permits }: { permits: Permit[] }) {
       {stats.map((stat) => (
         <div
           key={stat.label}
-          className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[var(--chart-surface)] shadow-sm p-4"
+          className="rounded-xl border border-white/10 bg-[var(--chart-surface)] shadow-sm p-4"
         >
           <div className="flex items-center gap-2">
             <span
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--accent-wash)] text-sm"
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sm ${stat.chip}`}
               aria-hidden
             >
               {stat.icon}
             </span>
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{stat.label}</span>
+            <span className="text-xs font-medium text-[var(--text-secondary)]">{stat.label}</span>
           </div>
           <div
-            className="mt-2 text-2xl font-semibold text-gray-900 dark:text-gray-100 truncate"
+            className="mt-2 text-2xl font-semibold text-[var(--text-primary)] truncate"
             title={stat.title}
           >
             {stat.value}
