@@ -41,6 +41,65 @@ class IsArcgisUrlTests(unittest.TestCase):
         self.assertFalse(oj._is_arcgis_url("https://data.lacity.org/resource/xnhu-aczu.json"))
 
 
+class FetchJsonRetryTests(unittest.TestCase):
+    """_fetch_json retries transient failures instead of giving up on a
+    single slow/flaky response -- a smaller city's ArcGIS/Socrata server can
+    be meaningfully less reliable than the well-provisioned ones this tool
+    was first tried against."""
+
+    def test_succeeds_after_transient_timeout(self):
+        calls = {"n": 0}
+
+        def fake_get(url, params=None, timeout=None):
+            calls["n"] += 1
+            if calls["n"] < 3:
+                raise oj.requests.exceptions.Timeout("slow server")
+            response = MagicMock()
+            response.status_code = 200
+            response.raise_for_status.return_value = None
+            response.json.return_value = {"ok": True}
+            return response
+
+        with patch("onboard_jurisdiction.requests.get", side_effect=fake_get), \
+             patch("onboard_jurisdiction.time.sleep"):
+            result = oj._fetch_json("https://example.com/data.json")
+
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(calls["n"], 3)
+
+    def test_retries_retryable_status_code(self):
+        calls = {"n": 0}
+
+        def fake_get(url, params=None, timeout=None):
+            calls["n"] += 1
+            response = MagicMock()
+            if calls["n"] < 2:
+                response.status_code = 503
+            else:
+                response.status_code = 200
+                response.raise_for_status.return_value = None
+                response.json.return_value = {"ok": True}
+            return response
+
+        with patch("onboard_jurisdiction.requests.get", side_effect=fake_get), \
+             patch("onboard_jurisdiction.time.sleep"):
+            result = oj._fetch_json("https://example.com/data.json")
+
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(calls["n"], 2)
+
+    def test_gives_up_after_max_retries(self):
+        def fake_get(url, params=None, timeout=None):
+            raise oj.requests.exceptions.Timeout("always slow")
+
+        with patch("onboard_jurisdiction.requests.get", side_effect=fake_get), \
+             patch("onboard_jurisdiction.time.sleep") as mock_sleep:
+            with self.assertRaises(oj.requests.exceptions.Timeout):
+                oj._fetch_json("https://example.com/data.json")
+
+        self.assertEqual(mock_sleep.call_count, oj._MAX_RETRIES - 1)
+
+
 class FetchDatasetTests(unittest.TestCase):
     def test_fetches_columns_and_samples(self):
         metadata = {

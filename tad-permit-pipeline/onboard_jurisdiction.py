@@ -33,6 +33,7 @@ Examples:
 import argparse
 import json
 import sys
+import time
 from urllib.parse import urlparse
 
 import requests
@@ -48,6 +49,9 @@ from sources.field_mapping import FieldMapping, build_mapper
 logger = get_logger("onboard_jurisdiction")
 
 REQUEST_TIMEOUT_SECONDS = 15
+_MAX_RETRIES = 3
+_BACKOFF_SECONDS = 1
+_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 def _is_arcgis_url(url: str) -> bool:
@@ -72,9 +76,35 @@ def _parse_socrata_resource(resource_url: str) -> tuple:
 
 
 def _fetch_json(url: str, params: dict = None) -> object:
-    response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT_SECONDS)
-    response.raise_for_status()
-    return response.json()
+    """Fetches JSON with retry/backoff on transient failures (timeout,
+    connection error, rate-limit/server-error status) -- same pattern as
+    geo.py's Census geocoder fetch and the production Socrata/ArcGIS
+    adapters. A smaller city's server (a single self-hosted ArcGIS instance,
+    say, vs. a well-provisioned metro's) can be meaningfully slower or
+    flakier than the endpoints this tool happened to be exercised against
+    first -- a single attempt with no retry means one slow response kills
+    the whole onboarding run instead of just costing a few seconds.
+    """
+    last_error = None
+
+    for attempt in range(1, _MAX_RETRIES + 1):
+        try:
+            response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT_SECONDS)
+            if response.status_code in _RETRYABLE_STATUS_CODES:
+                raise requests.exceptions.HTTPError(f"HTTP {response.status_code}", response=response)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            last_error = e
+            if attempt < _MAX_RETRIES:
+                wait = _BACKOFF_SECONDS * (2 ** (attempt - 1))
+                logger.warning(
+                    "Fetch failed for %s (attempt %s/%s): %s, retrying in %ss",
+                    url, attempt, _MAX_RETRIES, e, wait,
+                )
+                time.sleep(wait)
+
+    raise last_error
 
 
 def _fetch_socrata_dataset(resource_url: str, sample_size: int) -> tuple:
