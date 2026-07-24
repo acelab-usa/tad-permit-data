@@ -16,6 +16,7 @@ passed in from sources/registry.py are a starting point, not a guarantee.
 If coordinate coverage looks low after a real ingestion run, check the
 actual raw API response for the real field name and add it there.
 """
+import time
 from typing import Optional
 
 import requests
@@ -87,10 +88,10 @@ def extract_lat_lon(raw_item: dict, point_fields: tuple = ()) -> tuple:
 
 # Fallback "home city" for jurisdictions whose raw address is just a bare
 # street line with no city/state at all -- e.g. Allen's PDF ledger
-# ("945 Stockton Dr, 4130 4") and Chicago/NYC/Austin's mappers, which all
-# build `address` purely from street-number/name fields (see
-# map_chicago_to_schema et al. above). This is only consulted as a second
-# attempt, when geocoding the address exactly as given doesn't resolve -- a
+# ("945 Stockton Dr, 4130 4") and Chicago/NYC/Austin's FieldMappings (see
+# sources/registry.py), which all build `address` purely from
+# street-number/name fields. This is only consulted as a second attempt,
+# when geocoding the address exactly as given doesn't resolve -- a
 # jurisdiction whose addresses already include city/state/zip (e.g. an API
 # source returning "1955 GLACIER PARK AV, NAPERVILLE, IL 60540") never needs
 # an entry here at all, so onboarding one doesn't require touching this dict.
@@ -98,26 +99,59 @@ JURISDICTION_LOCATIONS = {
     "chicago": "Chicago, IL",
     "nyc": "New York, NY",
     "austin": "Austin, TX",
+    "la": "Los Angeles, CA",
     "allen": "Allen, TX",
 }
 
 _CENSUS_GEOCODER_URL = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress"
 _GEOCODE_TIMEOUT_SECONDS = 5
+_GEOCODE_MAX_RETRIES = 3
+_GEOCODE_BACKOFF_SECONDS = 1
+_GEOCODE_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+
+def _fetch_matches_with_retry(one_line: str) -> Optional[list]:
+    """Requests `one_line`'s matches with retry/backoff on transient failures
+    (timeout, connection error, rate-limit/server-error status) -- the
+    public Census geocoder is known to be slow/flaky under load, and a
+    single attempt with no retry would silently drop an otherwise-good
+    address to a transient blip rather than a real non-match. Returns None
+    (not an empty list) if every attempt failed, so the caller can tell
+    "genuinely no match" apart from "couldn't even ask"."""
+    last_error = None
+
+    for attempt in range(1, _GEOCODE_MAX_RETRIES + 1):
+        try:
+            response = requests.get(
+                _CENSUS_GEOCODER_URL,
+                params={"address": one_line, "benchmark": "Public_AR_Current", "format": "json"},
+                timeout=_GEOCODE_TIMEOUT_SECONDS,
+            )
+            if response.status_code in _GEOCODE_RETRYABLE_STATUS_CODES:
+                raise requests.exceptions.HTTPError(f"HTTP {response.status_code}", response=response)
+
+            response.raise_for_status()
+            return response.json()["result"]["addressMatches"]
+
+        except (requests.RequestException, ValueError, KeyError) as e:
+            last_error = e
+            if attempt < _GEOCODE_MAX_RETRIES:
+                wait = _GEOCODE_BACKOFF_SECONDS * (2 ** (attempt - 1))
+                logger.warning(
+                    "geocode_address: lookup failed for '%s' (attempt %s/%s): %s, retrying in %ss",
+                    one_line, attempt, _GEOCODE_MAX_RETRIES, e, wait,
+                )
+                time.sleep(wait)
+
+    logger.warning(
+        "geocode_address: giving up on '%s' after %s attempts: %s",
+        one_line, _GEOCODE_MAX_RETRIES, last_error,
+    )
+    return None
 
 
 def _geocode_one_line(one_line: str) -> tuple:
-    try:
-        response = requests.get(
-            _CENSUS_GEOCODER_URL,
-            params={"address": one_line, "benchmark": "Public_AR_Current", "format": "json"},
-            timeout=_GEOCODE_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-        matches = response.json()["result"]["addressMatches"]
-    except (requests.RequestException, ValueError, KeyError) as e:
-        logger.warning("geocode_address: lookup failed for '%s': %s", one_line, e)
-        return None, None
-
+    matches = _fetch_matches_with_retry(one_line)
     if not matches:
         return None, None
 
@@ -139,22 +173,27 @@ def geocode_address(address: Optional[str], jurisdiction: str) -> tuple:
     unrecognized jurisdiction -- so ingestion always continues without a
     location rather than blocking on this.
 
-    Tries the address exactly as given first, since many sources already
-    include city/state/zip. Only if that doesn't resolve does it retry with
-    a fixed per-jurisdiction city/state appended, for sources (like Allen's
-    PDF ledger) whose raw address is missing that context entirely.
+    If this jurisdiction has a known JURISDICTION_LOCATIONS entry, its raw
+    address is known to be missing city/state (e.g. Chicago/NYC/Austin/LA's
+    FieldMappings, Allen's PDF ledger) -- geocode with that city/state
+    appended directly, rather than ever trying the bare address on its own.
+    An unqualified street-only address handed to a *national* geocoder has
+    no way to disambiguate and can match a same-named street somewhere else
+    in the country entirely (seen in practice: a handful of LA permits
+    landed near the geographic center of the US this way) -- there's no
+    reason to risk that when we already know city/state is needed.
+
+    Only jurisdictions with no such entry (assumed to already supply a
+    complete address, e.g. an API returning
+    "1955 GLACIER PARK AV, NAPERVILLE, IL 60540") get geocoded as given.
     """
     if not address or not address.strip():
         return None, None
 
     address = address.strip()
-
-    lat, lon = _geocode_one_line(address)
-    if lat is not None:
-        return lat, lon
-
     city_state = JURISDICTION_LOCATIONS.get(jurisdiction.lower())
-    if not city_state:
-        return None, None
 
-    return _geocode_one_line(f"{address}, {city_state}")
+    if city_state:
+        return _geocode_one_line(f"{address}, {city_state}")
+
+    return _geocode_one_line(address)

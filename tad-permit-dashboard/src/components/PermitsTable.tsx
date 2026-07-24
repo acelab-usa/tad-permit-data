@@ -39,14 +39,14 @@ export default function PermitsTable({ permits, selectedId, onSelect }: PermitsT
   });
 
   return (
-    <div className="max-h-[32rem] overflow-y-auto overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+    <div className="max-h-[32rem] overflow-y-auto overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[var(--chart-surface)] shadow-sm">
       <table className="min-w-full text-sm">
-        <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
+        <thead className="bg-gray-100 dark:bg-gray-800 sticky top-0 z-10">
           <tr>
             {COLUMNS.map((col) => (
               <th
                 key={col.key}
-                className="text-left font-medium text-gray-600 dark:text-gray-300 px-3 py-2 whitespace-nowrap"
+                className="text-left font-medium text-gray-600 dark:text-gray-300 px-3 py-2.5 whitespace-nowrap"
               >
                 {col.label}
               </th>
@@ -54,12 +54,16 @@ export default function PermitsTable({ permits, selectedId, onSelect }: PermitsT
           </tr>
         </thead>
         <tbody>
-          {sorted.map((permit) => (
+          {sorted.map((permit, i) => (
             <tr
               key={permit.id}
               onClick={() => onSelect(permit)}
-              className={`cursor-pointer border-t border-gray-100 dark:border-gray-800 hover:bg-blue-50 dark:hover:bg-gray-800 ${
-                selectedId === permit.id ? "bg-blue-50 dark:bg-gray-800" : ""
+              className={`cursor-pointer border-t border-gray-100 dark:border-gray-800 hover:bg-[var(--accent-wash)] transition-colors ${
+                selectedId === permit.id
+                  ? "bg-[var(--accent-wash)]"
+                  : i % 2 === 1
+                    ? "bg-gray-50/60 dark:bg-gray-800/20"
+                    : ""
               }`}
             >
               {COLUMNS.map((col) => (

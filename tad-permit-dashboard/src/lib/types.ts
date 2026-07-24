@@ -23,6 +23,29 @@ export interface Permit {
   building_systems: string | null; // JSON-encoded string[], parse with parseBuildingSystems()
 }
 
+// Column set for CSV export -- the full record, not just the columns the
+// table UI happens to show, since a CSV is meant for further analysis
+// elsewhere. Shared between the Table page (full filtered export) and a
+// contractor's detail page (export scoped to just their permits).
+export const PERMIT_CSV_COLUMNS: { key: keyof Permit; label: string }[] = [
+  { key: "permit_id", label: "Permit ID" },
+  { key: "jurisdiction", label: "Jurisdiction" },
+  { key: "filing_date", label: "Filing date" },
+  { key: "permit_type_normalized", label: "Type (normalized)" },
+  { key: "permit_type_raw", label: "Type (raw)" },
+  { key: "address", label: "Address" },
+  { key: "owner_name", label: "Owner" },
+  { key: "contractor_name", label: "Contractor" },
+  { key: "valuation", label: "Valuation" },
+  { key: "square_footage", label: "Square footage" },
+  { key: "latitude", label: "Latitude" },
+  { key: "longitude", label: "Longitude" },
+  { key: "scope_summary", label: "Scope summary" },
+  { key: "source_format", label: "Source format" },
+  { key: "source_url", label: "Source URL" },
+  { key: "extracted_at", label: "Extracted at" },
+];
+
 export function parseBuildingSystems(raw: string | null): string[] {
   if (!raw) return [];
   try {

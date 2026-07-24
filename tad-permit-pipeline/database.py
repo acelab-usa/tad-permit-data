@@ -65,6 +65,20 @@ def init_db():
                 cursor.execute(f"ALTER TABLE permits ADD COLUMN {column} REAL")
                 logger.info("Migrated existing permits table: added missing column '%s'", column)
 
+        # Tracks how far a PDF-ledger jurisdiction has progressed through its
+        # source files, so a re-run (scheduled or manual) resumes from where
+        # it left off instead of re-reading -- and re-queuing a Hatchet event
+        # for -- pages already processed. API sources don't need this: their
+        # own INSERT OR IGNORE + skip-if-duplicate check already makes
+        # repeated runs cheap.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ingestion_cursors (
+                jurisdiction TEXT PRIMARY KEY,
+                current_filename TEXT NOT NULL,
+                last_page_processed INTEGER NOT NULL
+            )
+        ''')
+
         conn.commit()
         logger.info("Database initialized successfully: '%s'", DB_PATH)
     except sqlite3.Error as e:
@@ -128,6 +142,44 @@ def insert_permit(permit: PermitSchemaV2) -> bool:
     finally:
         if conn is not None:
             conn.close()
+
+
+def get_pdf_cursor(jurisdiction: str):
+    """Returns (current_filename, last_page_processed) for a PDF-ledger
+    jurisdiction, or (None, 0) if it has never been ingested -- meaning
+    "start from the first file, page 1"."""
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT current_filename, last_page_processed FROM ingestion_cursors WHERE jurisdiction = ?",
+            (jurisdiction,),
+        ).fetchone()
+        return (row["current_filename"], row["last_page_processed"]) if row else (None, 0)
+    finally:
+        conn.close()
+
+
+def update_pdf_cursor(jurisdiction: str, filename: str, last_page_processed: int):
+    """Records the last page successfully queued for a PDF-ledger
+    jurisdiction, so the next run resumes from there instead of re-reading
+    (and re-queuing a Hatchet event for) pages already handled."""
+    conn = get_connection()
+    try:
+        conn.execute(
+            """
+            INSERT INTO ingestion_cursors (jurisdiction, current_filename, last_page_processed)
+            VALUES (?, ?, ?)
+            ON CONFLICT(jurisdiction) DO UPDATE SET
+                current_filename = excluded.current_filename,
+                last_page_processed = excluded.last_page_processed
+            """,
+            (jurisdiction, filename, last_page_processed),
+        )
+        conn.commit()
+    except sqlite3.Error as e:
+        logger.error("Failed to update ingestion cursor for %s: %s", jurisdiction, e)
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":

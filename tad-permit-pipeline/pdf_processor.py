@@ -25,21 +25,25 @@ def extract_text_from_pdf(pdf_path, page_limit=5):
         return None
 
 
-def iter_pdf_pages(pdf_path, page_cap=None):
+def iter_pdf_pages(pdf_path, page_cap=None, start_page=0):
     """
     Opens a local PDF file and yields (page_number, page_text) for each
     non-blank page, using layout-preserving extraction (sorted reading order)
     suited to tabular ledger reports.
+
+    `start_page` (0-indexed) skips that many pages before reading begins --
+    used to resume a partially-processed file instead of re-reading pages
+    already queued in a prior run. `page_cap` bounds how many pages are read
+    *from that starting point*, not from the start of the document.
 
     A single corrupt/unreadable page is logged and skipped rather than
     aborting the whole document; a corrupt document raises so the caller can
     decide whether to skip the whole file.
     """
     with fitz.open(pdf_path) as doc:
-        total_pages = page_cap if page_cap is not None else len(doc)
-        total_pages = min(total_pages, len(doc))
+        end_idx = len(doc) if page_cap is None else min(len(doc), start_page + page_cap)
 
-        for page_idx in range(total_pages):
+        for page_idx in range(start_page, end_idx):
             try:
                 page = doc[page_idx]
                 page_text = page.get_text("text", sort=True)

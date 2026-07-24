@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import Filters from "@/components/Filters";
-import NavTabs from "@/components/NavTabs";
 import PermitDetail from "@/components/PermitDetail";
 import { usePermits } from "@/lib/usePermits";
 import { REGISTERED_JURISDICTIONS } from "@/lib/jurisdictions";
@@ -38,25 +37,21 @@ export default function MapPage() {
 
   return (
     <div className="min-h-screen p-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
           🗺️ Permit Map
         </h1>
         <button
           type="button"
           onClick={refresh}
-          className="rounded border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+          className="rounded-lg bg-[var(--accent)] text-black font-medium px-3 py-1.5 text-sm hover:brightness-95 transition-[filter]"
         >
           🔄 Refresh data
         </button>
       </div>
 
-      <div className="mb-6">
-        <NavTabs />
-      </div>
-
       {error && (
-        <div className="mb-4 rounded border border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800 p-3 text-sm text-red-700 dark:text-red-300">
+        <div className="mb-4 rounded-lg border border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800 p-3 text-sm text-red-700 dark:text-red-300">
           Failed to load permits: {error}
         </div>
       )}

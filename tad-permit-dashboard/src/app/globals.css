@@ -1,8 +1,23 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
+/* Dark-by-default, brand palette (acelabusa.com): near-black canvas, warm
+   off-white ink, mint-green accent. No light-mode toggle -- forcing the
+   `dark` class on <html> makes every existing `dark:` utility class the
+   active style everywhere, so this single token set is the only theme. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0a0a;
+  --foreground: #f5f4ee;
+
+  --chart-surface: #141412;
+  --text-primary: #f5f4ee;
+  --text-secondary: #a8a79f;
+  --text-muted: #726f66;
+  --chart-gridline: #262622;
+  --chart-baseline: #3a3934;
+  --chart-border: rgba(245, 244, 238, 0.1);
+  --accent: #34d399;
+  --accent-wash: rgba(52, 211, 153, 0.14);
 }
 
 @theme inline {
@@ -10,15 +25,39 @@
   --color-foreground: var(--foreground);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Leaflet's own stylesheet (leaflet/dist/leaflet.css) ships light-only
+   control chrome with no dark-mode variant -- overridden here so the zoom
+   control, attribution, and tooltips read as part of the app rather than
+   a light widget dropped onto a dark page. !important is warranted: this
+   is overriding a third-party library's own rules, and load order between
+   its stylesheet and this one isn't guaranteed. */
+.leaflet-control-zoom a {
+  background-color: var(--chart-surface) !important;
+  color: var(--text-primary) !important;
+  border-color: rgba(245, 244, 238, 0.15) !important;
+}
+.leaflet-control-zoom a:hover {
+  background-color: rgba(245, 244, 238, 0.08) !important;
+}
+.leaflet-control-attribution {
+  background: rgba(10, 10, 10, 0.75) !important;
+  color: var(--text-secondary) !important;
+}
+.leaflet-control-attribution a {
+  color: var(--text-secondary) !important;
+}
+.leaflet-tooltip {
+  background: var(--chart-surface) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid rgba(245, 244, 238, 0.12) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+}
+.leaflet-tooltip-top:before {
+  border-top-color: var(--chart-surface) !important;
 }

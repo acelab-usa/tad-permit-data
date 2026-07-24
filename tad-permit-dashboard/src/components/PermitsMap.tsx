@@ -2,7 +2,6 @@
 
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
-import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import L from "leaflet";
 import "leaflet.markercluster";
 import { useEffect, useRef } from "react";
@@ -19,6 +18,19 @@ interface PermitsMapProps {
 
 const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795]; // continental US
 const DEFAULT_ZOOM = 4;
+
+// Leaflet's tile layer wraps horizontally by default -- panning far enough
+// east/west shows a repeated copy of the world's tiles. Markers exist at one
+// fixed lat/lng each and never get duplicated onto those extra copies,
+// which is what made pins seem to "disappear" when scrolled past a wrap
+// boundary. There's no reason this map needs infinite world panning, so
+// `noWrap` on the tile layer stops the repeated copies from rendering at
+// all, and `maxBounds` (a single world's worth, north/south included) stops
+// the user from dragging into the now-empty space beyond it.
+const WORLD_BOUNDS: [[number, number], [number, number]] = [
+  [-90, -180],
+  [90, 180],
+];
 
 // Leaflet measures its container's size once when the map is created and
 // has no way to know if that size changes afterward (a window resize, a
@@ -78,13 +90,36 @@ function formatValuation(value: number | null): string {
 // (unlike the CircleMarker/SVG-path layer used before, which
 // leaflet.markercluster doesn't support -- it only clusters L.Marker-like
 // layers).
+//
+// A solid-fill dot with a dark ring (rather than the same-color
+// half-opacity border the first version used) reads with real contrast
+// against the light basemap regardless of hue, and a drop shadow gives it
+// depth instead of looking like a flat sticker. Selected state swaps the
+// ring to the brand accent instead of just growing the dot.
 function markerIcon(color: string, isSelected: boolean): L.DivIcon {
-  const size = isSelected ? 18 : 12;
-  const border = isSelected ? 3 : 1;
-  const opacity = isSelected ? 0.9 : 0.6;
+  const size = isSelected ? 14 : 10;
+  const ringWidth = isSelected ? 3 : 2;
+  const ringColor = isSelected ? "var(--accent)" : "rgba(10, 10, 10, 0.75)";
+  const total = size + ringWidth * 2;
   return L.divIcon({
     className: "",
-    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${color};opacity:${opacity};border:${border}px solid ${color};box-sizing:content-box;"></div>`,
+    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${color};border:${ringWidth}px solid ${ringColor};box-shadow:0 1px 6px rgba(0,0,0,0.7);box-sizing:content-box;"></div>`,
+    iconSize: [total, total],
+    iconAnchor: [total / 2, total / 2],
+  });
+}
+
+// Replaces leaflet.markercluster's own default look (a two-tone
+// yellow/orange/green ring, unchanged since the plugin's original 2012
+// release) with a dark pill in the brand accent, sized in the same
+// small/medium/large tiers the plugin uses.
+function clusterIcon(cluster: { getChildCount: () => number }): L.DivIcon {
+  const count = cluster.getChildCount();
+  const size = count < 10 ? 32 : count < 100 ? 40 : 48;
+  const fontSize = count < 100 ? 13 : 12;
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:var(--chart-surface);border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:700;font-size:${fontSize}px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;box-shadow:0 2px 10px rgba(0,0,0,0.7);">${count}</div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
@@ -113,7 +148,7 @@ function ClusteredMarkers({ permits, jurisdictions, selectedId, onSelect }: Perm
   const jurisdictionKey = jurisdictions.join(",");
 
   useEffect(() => {
-    const clusterGroup = L.markerClusterGroup({ maxClusterRadius: 60 });
+    const clusterGroup = L.markerClusterGroup({ maxClusterRadius: 60, iconCreateFunction: clusterIcon });
     const markersById = new Map<number, L.Marker>();
 
     permits.forEach((permit) => {
@@ -160,11 +195,23 @@ export default function PermitsMap({ permits, jurisdictions, selectedId, onSelec
       center={DEFAULT_CENTER}
       zoom={DEFAULT_ZOOM}
       scrollWheelZoom
+      maxBounds={WORLD_BOUNDS}
+      maxBoundsViscosity={1.0}
+      minZoom={2}
       className="h-[32rem] w-full rounded-lg border border-gray-200 dark:border-gray-700"
     >
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        // CartoDB's "Voyager" basemap: muted, modern colors (soft cream
+        // roads, pale blue water) rather than a stark black or the more
+        // dated-looking default OSM raster tiles. Not black -- a solid-
+        // black basemap read as a dead zone rather than part of the theme;
+        // this keeps the map its own natural colors (like a photo or
+        // embedded image legitimately breaks from a dark app chrome) while
+        // the floating controls and markers stay on-brand.
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+        subdomains="abcd"
+        noWrap
       />
       <SyncMapSize />
       <FitBounds permits={permits} />
