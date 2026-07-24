@@ -53,15 +53,8 @@ NYC_MAPPING = FieldMapping(
     date_fields=("issued_date", "approved_date"),
     owner_name_fields=("owner_name",),
     contractor_name_fields=("licensee_s_business_name",),
-    # work_type carries the actual construction category (e.g. "Plumbing",
-    # "Mechanical"); filing_reason is permit lifecycle status (e.g. "Initial
-    # Permit", "Renewal Permit Without Changes") and is present on
-    # essentially every record, so it only matters as a fallback.
     permit_type_fields=("work_type", "filing_reason"),
     valuation_field="estimated_job_costs",
-    # NYC's raw_scope_of_work/scope_summary are built from two separate
-    # fields with fixed labels, not "pick a field and truncate" -- the one
-    # thing here a flat FieldMapping can't express declaratively.
     scope_builder=_nyc_scope_builder,
     point_fields=_GEO_POINT_FIELDS,
 )
@@ -73,15 +66,7 @@ AUSTIN_MAPPING = FieldMapping(
     permit_id_field="permit_number",
     address_fields=("original_address1",),
     date_fields=("issue_date",),
-    # owner_name_fields intentionally left empty -- Austin redacts primary
-    # owners from this endpoint due to privacy laws, not because the field
-    # is simply absent.
     contractor_name_fields=("contractor_company_name", "contractor_name"),
-    # permit_class_mapped is Austin's own Residential/Commercial split -- a
-    # different axis (property class, not work type) from what this column
-    # means everywhere else, so it's only a secondary signal for the
-    # normalizer, never surfaced as permit_type_raw itself. work_class (e.g.
-    # "New", "Remodel", "Demolition") is the actual construction-type signal.
     permit_type_fields=("work_class", "permit_class_mapped"),
     square_footage_field="total_lot_sq_ft",
     valuation_field="total_job_valuation",
@@ -90,15 +75,6 @@ AUSTIN_MAPPING = FieldMapping(
 )
 
 
-# Added from a live sample (`data.seattle.gov/resource/76t5-zqzr.json`), so
-# these field names are actually verified -- unlike Chicago/NYC/Austin's
-# geometry field guesses. Needs no custom mapper_func or scope_builder at
-# all: every field is a plain rename or ordered candidate, and Seattle's
-# plain top-level latitude/longitude fields are already covered by the
-# fields geo.extract_lat_lon() tries first, with no point_fields needed.
-# NOTE: the `url` below (the bulk-query endpoint used by fetch_raw_records)
-# wasn't independently verified live -- only the plain /resource/ endpoint
-# used to pull the sample was. Confirm with a real ingestion run.
 SEATTLE_MAPPING = FieldMapping(
     jurisdiction="seattle",
     source_url="https://data.seattle.gov/resource/76t5-zqzr.json",
@@ -106,10 +82,6 @@ SEATTLE_MAPPING = FieldMapping(
     address_fields=("originaladdress1", "originalcity", "originalstate", "originalzip"),
     address_separator=", ",
     date_fields=("issueddate", "applieddate"),
-    # permittypedesc is the closest single field to what the other cities
-    # call "permit type" (e.g. "New", "Alteration"); permitclass is a
-    # fallback/secondary signal for the normalizer. Seattle's sample payload
-    # has no owner/contractor/square-footage fields at all.
     permit_type_fields=("permittypedesc", "permitclass"),
     valuation_field="estprojectcost",
     scope_fields=("description",),
@@ -117,35 +89,13 @@ SEATTLE_MAPPING = FieldMapping(
 )
 
 
-# Added from a live sample (`data.lacity.org/resource/xnhu-aczu.json`), so
-# these field names are actually verified. Needs no custom mapper_func or
-# scope_builder. Two things this dataset genuinely lacks, rather than us
-# just not mapping them: no latitude/longitude or geometry field at all
-# (LA permits get coordinates entirely from the geocoding fallback -- see
-# the "la" entry in geo.JURISDICTION_LOCATIONS), and no complete owner-name
-# field -- only applicant_first_name, with no last name alongside it, too
-# incomplete to trust as owner_name.
 LA_MAPPING = FieldMapping(
     jurisdiction="la",
     source_url="https://data.lacity.org/resource/xnhu-aczu.json",
     permit_id_field="pcis_permit",
-    # zip_code is included (unlike Chicago/NYC/Austin's address_fields,
-    # which have no zip field to draw from at all) since LA's addresses are
-    # otherwise disambiguated only by "Los Angeles, CA" -- a huge, dense
-    # city with many similarly-named streets across neighborhoods. Without
-    # zip, the geocode fallback had a real, observed failure mode: an
-    # unqualified-enough address occasionally matched a same-named street
-    # elsewhere in the country. The zip's position (after the street, before
-    # the appended "Los Angeles, CA") isn't standard USPS order -- worth
-    # confirming match-rate improvement against a real ingestion run.
     address_fields=("address_start", "street_direction", "street_name", "street_suffix", "zip_code"),
     date_fields=("issue_date",),
     contractor_name_fields=("contractors_business_name",),
-    # permit_sub_type (e.g. "1 or 2 Family Dwelling") is occupancy, not
-    # construction type -- kept only as a secondary signal for the
-    # normalizer, same role Seattle's permitclass and Austin's
-    # permit_class_mapped play. permit_type (e.g. "Bldg-New") is the actual
-    # construction-type signal.
     permit_type_fields=("permit_type", "permit_sub_type"),
     valuation_field="valuation",
     square_footage_field="floor_area_l_a_building_code_definition",
@@ -153,26 +103,6 @@ LA_MAPPING = FieldMapping(
 )
 
 
-# Added from a real onboard_jurisdiction.py run against DC's ArcGIS
-# FeatureServer layer 17, then reviewed by hand -- the first jurisdiction
-# onboarded through that tool. Two things the LLM's draft got wrong, caught
-# by checking the full field list rather than trusting the draft: it
-# proposed FEES_PAID for valuation_field, but this dataset has no real
-# cost/valuation field at all (FEE_TYPE/FEES_PAID are the processing fee,
-# not the project's reported cost -- a fee of $36 does not mean a $36
-# project) -- left unmapped rather than storing a systematically wrong
-# number. No square footage field exists either.
-#
-# permit_type_fields' "Other" cases are a genuine no-signal situation, not
-# a taxonomy gap: DC's "Post Card" (fast-track) permits all show
-# PERMIT_SUBTYPE_NAME="BUILDING" regardless of actual scope (a deck, a
-# fence, an interior demo) -- too generic to safely map to any one
-# category without misclassifying the others that share the same value.
-#
-# No point_fields needed -- FULL_ADDRESS already includes city/state/zip,
-# and coordinates come from ArcGISFeatureSource's geometry flattening
-# (this layer also happens to expose plain LATITUDE/LONGITUDE attribute
-# fields, redundant with the geometry).
 DC_MAPPING = FieldMapping(
     jurisdiction="dc",
     source_url="https://maps2.dcgis.dc.gov/dcgis/rest/services/FEEDS/DCRA/FeatureServer/17",
@@ -183,6 +113,191 @@ DC_MAPPING = FieldMapping(
     contractor_name_fields=("PERMIT_APPLICANT",),
     permit_type_fields=("PERMIT_TYPE_NAME", "PERMIT_SUBTYPE_NAME", "PERMIT_CATEGORY_NAME"),
     scope_fields=("DESC_OF_WORK",),
+)
+
+SF_MAPPING = FieldMapping(
+    jurisdiction='sf',
+    source_url='https://data.sfgov.org/resource/i98e-djp9.json',
+    permit_id_field='permit_number',
+    address_fields=('street_number', 'street_number_suffix', 'street_name', 'street_suffix', 'unit', 'unit_suffix'),
+    address_separator=' ',
+    date_fields=('permit_creation_date', 'filed_date', 'issued_date', 'approved_date'),
+    owner_name_fields=(),
+    contractor_name_fields=(),
+    permit_type_fields=('permit_type_definition', 'permit_type'),
+    valuation_field='estimated_cost',
+    square_footage_field=None,
+    scope_fields=('description',),
+    point_fields=('location',),
+)
+
+
+SAN_DIEGO_COUNTY_MAPPING = FieldMapping(
+    jurisdiction='san_diego_county',
+    source_url='https://data.sandiegocounty.gov/resource/dyzh-7eat.json',
+    permit_id_field='record_id',
+    address_fields=('full_address',),
+    address_separator=' ',
+    date_fields=('issued_date', 'open_date'),
+    owner_name_fields=(),
+    contractor_name_fields=('contractor_name',),
+    permit_type_fields=('record_category', 'record_type', 'record_subtype', 'primary_scope_code'),
+    valuation_field='valuation',
+    square_footage_field='floor_area',
+    scope_fields=('use',),
+    point_fields=('geocoded_column',),
+)
+
+
+CAMBRIDGE_MAPPING = FieldMapping(
+    jurisdiction='cambridge',
+    source_url='https://data.cambridgema.gov/resource/9qm7-wbdc.json',
+    permit_id_field='id',
+    address_fields=('full_address',),
+    address_separator=' ',
+    date_fields=('issue_date', 'applicant_submit_date'),
+    owner_name_fields=(),
+    contractor_name_fields=('licensed_name', 'applicant_name'),
+    permit_type_fields=('permit_type', 'construction_type', 'proposed_building_use', 'proposed_property_use'),
+    valuation_field='total_cost_of_construction',
+    square_footage_field='gross_square_footage',
+    scope_fields=('description_of_work', 'isd_approved_description'),
+    point_fields=('coordinates',),
+)
+
+
+SEATTLE_ALT_MAPPING = FieldMapping(
+    jurisdiction='seattle_alt',
+    source_url='https://data.seattle.gov/resource/8tqq-u7ib.json',
+    permit_id_field='permitnum',
+    address_fields=('originaladdress1', 'originalcity', 'originalstate', 'originalzip'),
+    address_separator=' ',
+    date_fields=('issueddate', 'applieddate'),
+    owner_name_fields=(),
+    contractor_name_fields=('contractorcompanyname',),
+    permit_type_fields=('permittypedesc', 'permitclass', 'permitclassmapped'),
+    valuation_field='estprojectcost',
+    square_footage_field=None,
+    scope_fields=('description',),
+    point_fields=('location1',),
+)
+
+NEW_ORLEANS_MAPPING = FieldMapping(
+    jurisdiction='new_orleans',
+    source_url='https://data.nola.gov/resource/nbcf-m6c2.json',
+    permit_id_field='numstring',
+    address_fields=('address',),
+    address_separator=' ',
+    date_fields=('issuedate',),
+    owner_name_fields=(),
+    contractor_name_fields=(),
+    permit_type_fields=('permittype', 'proposeduseindustry', 'landuse', 'topcat', 'proposedusecategory'),
+    valuation_field='constructionval',
+    square_footage_field=None,
+    scope_fields=('descr',),
+    point_fields=('the_geom',),
+)
+
+
+CINCINNATI_MAPPING = FieldMapping(
+    jurisdiction='cincinnati',
+    source_url='https://data.cincinnati-oh.gov/resource/uhjb-xac9.json',
+    permit_id_field='permitnum',
+    address_fields=('originaladdress1', 'originalcity', 'originalstate', 'originalzip'),
+    address_separator=', ',
+    date_fields=('issueddate', 'applieddate'),
+    owner_name_fields=(),
+    contractor_name_fields=('companyname',),
+    permit_type_fields=('permittypemapped', 'permittype', 'workclassmapped', 'workclass', 'permitclass'),
+    valuation_field='estprojectcostdec',
+    square_footage_field='totalsqft',
+    scope_fields=('description', 'proposeduse'),
+    point_fields=(),
+)
+
+
+SACRAMENTO_MAPPING = FieldMapping(
+    jurisdiction='sacramento',
+    source_url='https://services2.arcgis.com/CyVvlIiUfRBmMQuu/arcgis/rest/services/Building_Permits_Applications_view/FeatureServer/0',
+    permit_id_field='PermitNumber',
+    address_fields=('StreetAddress', 'AddressUnit', 'City', 'State', 'Zip'),
+    address_separator=' ',
+    date_fields=('IssueDate', 'ApplicationDate'),
+    owner_name_fields=(),
+    contractor_name_fields=(),
+    permit_type_fields=('PermitType', 'ConstructionType', 'WorkType'),
+    valuation_field=None,
+    square_footage_field=None,
+    scope_fields=('WorkDesc',),
+    point_fields=(),
+)
+
+
+ALBUQUERQUE_MAPPING = FieldMapping(
+    jurisdiction='albuquerque',
+    source_url='https://coageo.cabq.gov/cabqgeo/rest/services/agis/City_Building_Permits/FeatureServer/0',
+    permit_id_field='PermitNumber',
+    address_fields=('CalculatedAddress',),
+    address_separator=' ',
+    date_fields=('DateIssued', 'DateEntered', 'created_date'),
+    owner_name_fields=('Owner',),
+    contractor_name_fields=('Contractor',),
+    permit_type_fields=('TypeofWork', 'GeneralCategory', 'TypeofStructure'),
+    valuation_field='Valuation',
+    square_footage_field='SquareFootage',
+    scope_fields=('WorkDescription',),
+    point_fields=(),
+)
+
+
+BALTIMORE_MAPPING = FieldMapping(
+    jurisdiction='baltimore',
+    source_url='https://egisdata.baltimorecity.gov/egis/rest/services/Housing/DHCD_Open_Baltimore_Datasets/FeatureServer/3',
+    permit_id_field='CaseNumber',
+    address_fields=('Address',),
+    address_separator=' ',
+    date_fields=('IssuedDate',),
+    owner_name_fields=(),
+    contractor_name_fields=(),
+    permit_type_fields=('PermitName', 'ExistingUse', 'ProposedUse'),
+    valuation_field='Cost',
+    square_footage_field=None,
+    scope_fields=('Description',),
+    point_fields=(),
+)
+
+
+KANSAS_CITY_MAPPING = FieldMapping(
+    jurisdiction='kansas_city',
+    source_url='https://data.kcmo.org/resource/w8jz-wjgn.json',
+    permit_id_field='permit_number',
+    address_fields=('main_address_line1', 'main_address_line2'),
+    address_separator=', ',
+    date_fields=('issue_date', 'application_date'),
+    owner_name_fields=(),
+    contractor_name_fields=(),
+    permit_type_fields=('permit_type', 'work_class'),
+    valuation_field='valuation',
+    square_footage_field='square_feet',
+    scope_fields=('project',),
+    point_fields=(),
+)
+
+
+COLUMBUS_MAPPING = FieldMapping(
+    jurisdiction='columbus',
+    source_url='https://gis.columbus.gov/arcgis/rest/services/Applications/Neighborhood/MapServer/41',
+    permit_id_field='B1_ALT_ID',
+    address_fields=('SITE_ADDRESS', 'B1_SITUS_ZIP'),
+    address_separator=' ',
+    date_fields=(),
+    owner_name_fields=(),
+    contractor_name_fields=(),
+    permit_type_fields=('CONST_TYPE_CODE',),
+    valuation_field=None,
+    square_footage_field=None,
+    scope_fields=(),
+    point_fields=(),
 )
 
 
@@ -242,6 +357,72 @@ SOURCES = {
     "naperville": PDFLedgerSource(
         name="naperville",
         folder_path="./naperville_pdfs"
+    ),
+    "sf": SocrataAPISource(
+        name="sf",
+        url="https://data.sfgov.org/api/v3/views/i98e-djp9/query.json",
+        date_column="permit_creation_date",
+        mapper_func=build_mapper(SF_MAPPING),
+    ),
+    "san_diego_county": SocrataAPISource(
+        name="san_diego_county",
+        url="https://data.sandiegocounty.gov/api/v3/views/dyzh-7eat/query.json",
+        date_column="issued_date",
+        mapper_func=build_mapper(SAN_DIEGO_COUNTY_MAPPING),
+    ),
+    "cambridge": SocrataAPISource(
+        name="cambridge",
+        url="https://data.cambridgema.gov/api/v3/views/9qm7-wbdc/query.json",
+        date_column="issue_date",
+        mapper_func=build_mapper(CAMBRIDGE_MAPPING),
+    ),
+    "seattle_alt": SocrataAPISource(
+        name="seattle_alt",
+        url="https://data.seattle.gov/api/v3/views/8tqq-u7ib/query.json",
+        date_column="issueddate",
+        mapper_func=build_mapper(SEATTLE_ALT_MAPPING),
+    ),
+    "new_orleans": SocrataAPISource(
+        name="new_orleans",
+        url="https://data.nola.gov/api/v3/views/nbcf-m6c2/query.json",
+        date_column="issuedate",
+        mapper_func=build_mapper(NEW_ORLEANS_MAPPING),
+    ),
+    "cincinnati": SocrataAPISource(
+        name="cincinnati",
+        url="https://data.cincinnati-oh.gov/api/v3/views/uhjb-xac9/query.json",
+        date_column="issueddate",
+        mapper_func=build_mapper(CINCINNATI_MAPPING),
+    ),
+    "sacramento": ArcGISFeatureSource(
+        name="sacramento",
+        url="https://services2.arcgis.com/CyVvlIiUfRBmMQuu/arcgis/rest/services/Building_Permits_Applications_view/FeatureServer/0",
+        date_column="IssueDate",
+        mapper_func=build_mapper(SACRAMENTO_MAPPING),
+    ),
+    "albuquerque": ArcGISFeatureSource(
+        name="albuquerque",
+        url="https://coageo.cabq.gov/cabqgeo/rest/services/agis/City_Building_Permits/FeatureServer/0",
+        date_column="DateIssued",
+        mapper_func=build_mapper(ALBUQUERQUE_MAPPING),
+    ),
+    "baltimore": ArcGISFeatureSource(
+        name="baltimore",
+        url="https://egisdata.baltimorecity.gov/egis/rest/services/Housing/DHCD_Open_Baltimore_Datasets/FeatureServer/3",
+        date_column="IssuedDate",
+        mapper_func=build_mapper(BALTIMORE_MAPPING),
+    ),
+    "kansas_city": SocrataAPISource(
+        name="kansas_city",
+        url="https://data.kcmo.org/api/v3/views/w8jz-wjgn/query.json",
+        date_column="issue_date",
+        mapper_func=build_mapper(KANSAS_CITY_MAPPING),
+    ),
+    "columbus": ArcGISFeatureSource(
+        name="columbus",
+        url="https://gis.columbus.gov/arcgis/rest/services/Applications/Neighborhood/MapServer/41",
+        date_column="ISSUED_YEAR",
+        mapper_func=build_mapper(COLUMBUS_MAPPING),
     ),
 }
 
