@@ -20,6 +20,22 @@ export function valuationByJurisdiction(permits: Permit[]): DataPoint[] {
     .sort((a, b) => b.value - a.value);
 }
 
+// Counts permits per jurisdiction, descending -- a distinct metric from
+// valuationByJurisdiction (count of permits, not sum of $), used for the
+// Overview page's "top jurisdiction" highlight so it isn't just a
+// single-row restatement of that chart.
+export function countByJurisdiction(permits: Permit[]): DataPoint[] {
+  const counts = new Map<string, number>();
+
+  for (const p of permits) {
+    counts.set(p.jurisdiction, (counts.get(p.jurisdiction) ?? 0) + 1);
+  }
+
+  return Array.from(counts.entries())
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
+}
+
 // Counts permits per normalized type, descending. A permit with no
 // normalized type is bucketed as "Unspecified" rather than dropped.
 export function countByPermitType(permits: Permit[]): DataPoint[] {
