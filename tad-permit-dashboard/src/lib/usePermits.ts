@@ -2,23 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { applyFilters, type FiltersState } from "./filters";
-import { REGISTERED_JURISDICTIONS } from "./jurisdictions";
-import { PERMIT_TYPE_TAXONOMY } from "./permit-types";
 import type { Permit } from "./types";
 
-// Union the *registered* jurisdictions/permit-type taxonomy with whatever's
-// actually in the data, so a jurisdiction/type with an adapter but no
-// ingested rows yet still shows up as a selectable filter with zero
-// results, instead of silently disappearing.
+// Options come only from what's actually in the data -- a registered
+// jurisdiction/type with an adapter but zero ingested rows won't show up
+// as a filter until it has at least one permit. (Previously unioned in the
+// full registered set so unpopulated ones showed as empty-result filters,
+// but that read as "these options don't exist" rather than "no data yet.")
 export function optionsFor(permits: Permit[]) {
-  const jurisdictions = Array.from(
-    new Set<string>([...REGISTERED_JURISDICTIONS, ...permits.map((p) => p.jurisdiction)])
-  ).sort();
+  const jurisdictions = Array.from(new Set(permits.map((p) => p.jurisdiction))).sort();
   const permitTypes = Array.from(
-    new Set<string>([
-      ...PERMIT_TYPE_TAXONOMY,
-      ...permits.map((p) => p.permit_type_normalized).filter((t): t is string => t !== null),
-    ])
+    new Set(permits.map((p) => p.permit_type_normalized).filter((t): t is string => t !== null))
   ).sort();
   return { jurisdictions, permitTypes };
 }
