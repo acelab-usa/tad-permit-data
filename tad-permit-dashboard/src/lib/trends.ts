@@ -58,6 +58,21 @@ export interface ContractorSummary {
   jurisdictions: string[]; // distinct, sorted
 }
 
+// "OWNER-BUILDER" (LA), "OWNER" (seen in other jurisdictions), etc. are a
+// real, meaningful value -- they mean "the property owner performed the
+// work themselves, there is no third-party contractor" -- not a company
+// name, and not missing data either. Left as raw strings, spelling variants
+// split what's really one concept across separate leaderboard rows; this
+// canonicalizes all of them to one label so the count is combined and
+// still clearly visible (not hidden, just not duplicated).
+const OWNER_SELF_PERFORMED_PATTERN = /^owner(?:[\s-]*builder)?$/i;
+const OWNER_SELF_PERFORMED_LABEL = "Owner (self-performed)";
+
+export function canonicalContractorName(rawName: string): string {
+  const trimmed = rawName.trim();
+  return OWNER_SELF_PERFORMED_PATTERN.test(trimmed) ? OWNER_SELF_PERFORMED_LABEL : trimmed;
+}
+
 // Full contractor directory, descending by permit count -- the aggregation
 // both the Top Contractors chart and the /contractors directory page draw
 // from, so there's one place that decides what "counts" as a contractor
@@ -66,8 +81,9 @@ export function summarizeContractors(permits: Permit[]): ContractorSummary[] {
   const byName = new Map<string, { count: number; valuation: number; jurisdictions: Set<string> }>();
 
   for (const p of permits) {
-    const name = p.contractor_name?.trim();
-    if (!name) continue;
+    const raw = p.contractor_name?.trim();
+    if (!raw) continue;
+    const name = canonicalContractorName(raw);
     const entry = byName.get(name) ?? { count: 0, valuation: 0, jurisdictions: new Set<string>() };
     entry.count += 1;
     if (p.valuation !== null) entry.valuation += p.valuation;

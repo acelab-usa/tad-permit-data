@@ -8,7 +8,7 @@ import PermitDetail from "@/components/PermitDetail";
 import { usePermits } from "@/lib/usePermits";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { PERMIT_CSV_COLUMNS, type Permit } from "@/lib/types";
-import { formatCompactCurrency } from "@/lib/trends";
+import { canonicalContractorName, formatCompactCurrency } from "@/lib/trends";
 
 function slugFilename(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "contractor";
@@ -20,7 +20,10 @@ export default function ContractorDetailPage() {
   const { permits, error, refresh } = usePermits();
   const [selected, setSelected] = useState<Permit | null>(null);
 
-  const contractorPermits = (permits ?? []).filter((p) => p.contractor_name?.trim() === name);
+  const contractorPermits = (permits ?? []).filter((p) => {
+    const raw = p.contractor_name?.trim();
+    return raw ? canonicalContractorName(raw) === name : false;
+  });
   const totalValuation = contractorPermits.reduce((sum, p) => sum + (p.valuation ?? 0), 0);
   const jurisdictions = Array.from(new Set(contractorPermits.map((p) => p.jurisdiction))).sort();
 
