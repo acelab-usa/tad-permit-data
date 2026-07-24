@@ -24,7 +24,7 @@ from typing import Callable, Optional
 import requests
 
 from logging_setup import get_logger
-from sources.base import APIPermitSource
+from sources.base import APIPermitSource, validate_date_column
 
 logger = get_logger("sources.socrata")
 
@@ -46,7 +46,7 @@ class SocrataAPISource(APIPermitSource):
     ):
         self.name = name
         self.url = url
-        self.date_column = date_column
+        self.date_column = validate_date_column(date_column, name)
         self.mapper_func = mapper_func
         self.app_token_env = app_token_env
         # Some feeds (e.g. NYC) use a sentinel value to mean "not actually a

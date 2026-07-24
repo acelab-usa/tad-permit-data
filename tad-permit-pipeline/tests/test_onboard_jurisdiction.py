@@ -422,6 +422,22 @@ class FormatSourceEntryTests(unittest.TestCase):
         entry = oj.format_source_entry(mapping, "https://x/resource/y.json", "x", "X_MAPPING")
         self.assertIn("TODO_DATE_COLUMN", entry)
 
+    def test_missing_date_fields_gets_an_inline_warning(self):
+        # The placeholder alone looks like a plausible (if oddly-named) real
+        # column once pasted -- this is what actually happened onboarding
+        # Columbus -- so an unmapped date field also gets a loud comment
+        # directly on the line most likely to get copied without reading
+        # the review section above it.
+        mapping = self._mapping(date_fields=())
+        entry = oj.format_source_entry(mapping, "https://x/resource/y.json", "x", "X_MAPPING")
+        self.assertIn("UNMAPPED", entry)
+
+    def test_mapped_date_field_gets_no_warning(self):
+        entry = oj.format_source_entry(
+            self._mapping(), "https://data.denvergov.org/resource/xxxx.json", "denver", "DENVER_MAPPING"
+        )
+        self.assertNotIn("UNMAPPED", entry)
+
 
 if __name__ == "__main__":
     unittest.main()

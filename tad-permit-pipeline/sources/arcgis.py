@@ -33,7 +33,7 @@ from typing import Callable, Optional
 import requests
 
 from logging_setup import get_logger
-from sources.base import APIPermitSource
+from sources.base import APIPermitSource, validate_date_column
 
 logger = get_logger("sources.arcgis")
 
@@ -68,7 +68,7 @@ class ArcGISFeatureSource(APIPermitSource):
     ):
         self.name = name
         self.url = url.rstrip("/")
-        self.date_column = date_column
+        self.date_column = validate_date_column(date_column, name)
         self.mapper_func = mapper_func
         self._skip_field = skip_sentinel_field
         self._skip_value = skip_sentinel_value

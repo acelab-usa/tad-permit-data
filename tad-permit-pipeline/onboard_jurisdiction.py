@@ -299,13 +299,23 @@ def format_source_entry(mapping: FieldMapping, resource_url: str, jurisdiction: 
     """Returns the ready-to-paste SOURCES dict entry for sources/registry.py,
     picking ArcGISFeatureSource or SocrataAPISource by URL shape."""
     date_column = mapping.date_fields[0] if mapping.date_fields else "TODO_DATE_COLUMN"
+    # A loud, inline warning right on the line most likely to get pasted
+    # without reading the review section above it first -- the placeholder
+    # otherwise looks like a plausible (if oddly-named) real column, and
+    # both adapters now reject it at import time anyway, but a clear
+    # warning *before* it's pasted beats a ValueError *after*.
+    date_comment = (
+        "  # <-- UNMAPPED: no confident date field found, check the real field list by hand"
+        if not mapping.date_fields
+        else ""
+    )
 
     if _is_arcgis_url(resource_url):
         return (
             f'"{jurisdiction}": ArcGISFeatureSource(\n'
             f'    name="{jurisdiction}",\n'
             f'    url="{resource_url}",\n'
-            f'    date_column="{date_column}",\n'
+            f'    date_column="{date_column}",{date_comment}\n'
             f'    mapper_func=build_mapper({var_name}),\n'
             f"),"
         )
@@ -315,7 +325,7 @@ def format_source_entry(mapping: FieldMapping, resource_url: str, jurisdiction: 
         f'"{jurisdiction}": SocrataAPISource(\n'
         f'    name="{jurisdiction}",\n'
         f'    url="{query_url}",\n'
-        f'    date_column="{date_column}",\n'
+        f'    date_column="{date_column}",{date_comment}\n'
         f'    mapper_func=build_mapper({var_name}),\n'
         f"),"
     )

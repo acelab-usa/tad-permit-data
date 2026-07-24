@@ -3,6 +3,27 @@ from abc import ABC, abstractmethod
 from typing import Any, Iterable
 
 
+def validate_date_column(date_column: str, source_name: str) -> str:
+    """Raises immediately, at adapter-construction time (i.e. when
+    sources/registry.py is imported), if `date_column` looks like
+    onboard_jurisdiction.py's unfilled "TODO_DATE_COLUMN" placeholder --
+    that placeholder gets emitted whenever the LLM couldn't confidently
+    find a real date field and is meant as a "fill this in by hand" marker,
+    not a value to paste into the registry as-is. Left unfilled, it reaches
+    the upstream API as a real (nonexistent) field name and fails only at
+    ingestion time, three retries deep, as a generic "Invalid or missing
+    input parameters" error with no indication of which field is wrong or
+    why -- this turns that into an immediate, specific error instead.
+    """
+    if not date_column or date_column.strip().upper().startswith("TODO"):
+        raise ValueError(
+            f"{source_name}: date_column={date_column!r} looks like an unfilled "
+            "onboard_jurisdiction.py placeholder, not a real column name -- "
+            "check the dataset's actual field list and set a real one."
+        )
+    return date_column
+
+
 class PermitSource(ABC):
     """A jurisdiction's ingestion adapter: how to reach it and how to map it."""
 
