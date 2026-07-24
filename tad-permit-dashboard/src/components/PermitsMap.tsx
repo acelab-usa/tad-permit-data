@@ -136,6 +136,50 @@ function tooltipHtml(permit: Permit): string {
   `;
 }
 
+// A marker's jurisdiction, stashed at creation time so a cluster hovering
+// over a pile of them can tally its constituents without having to re-look
+// each one up against the permits list.
+interface JurisdictionMarker extends L.Marker {
+  __jurisdiction: string;
+}
+
+// A cluster's own hover event isn't in @types/leaflet.markercluster --
+// it's real at runtime (leaflet.markercluster fires it on the group), just
+// untyped, so the handler below narrows it locally rather than fighting
+// the library's types.
+interface ClusterMouseEvent extends L.LeafletEvent {
+  layer: L.MarkerCluster;
+}
+
+// Per-jurisdiction breakdown for a cluster's hover tooltip -- the default
+// numbered bubble tells you "156 permits here" but not which cities they
+// actually are, which matters once a cluster spans more than one
+// jurisdiction (e.g. two nearby cities' markers collapsing together at a
+// low zoom level).
+function clusterBreakdownHtml(children: L.Marker[], jurisdictions: string[]): string {
+  const counts = new Map<string, number>();
+  for (const marker of children) {
+    const jurisdiction = (marker as JurisdictionMarker).__jurisdiction;
+    counts.set(jurisdiction, (counts.get(jurisdiction) ?? 0) + 1);
+  }
+
+  const rows = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  const lines = rows
+    .map(([jurisdiction, count]) => {
+      const color = colorForJurisdiction(jurisdiction, jurisdictions);
+      return `
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="width:8px;height:8px;border-radius:9999px;background:${color};flex-shrink:0;"></span>
+          <span>${jurisdiction}</span>
+          <span style="margin-left:auto;font-weight:600;padding-left:12px;">${count}</span>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `<div style="font-size:12px;line-height:1.6;min-width:110px;">${lines}</div>`;
+}
+
 // Builds (and rebuilds, on permit-set changes) a marker cluster group --
 // nearby markers collapse into a single numbered bubble at lower zoom
 // levels and split apart as you zoom in, so a dense cluster of permits
@@ -155,11 +199,30 @@ function ClusteredMarkers({ permits, jurisdictions, selectedId, onSelect }: Perm
       const color = colorForJurisdiction(permit.jurisdiction, jurisdictions);
       const marker = L.marker([permit.latitude as number, permit.longitude as number], {
         icon: markerIcon(color, false),
-      });
+      }) as JurisdictionMarker;
+      marker.__jurisdiction = permit.jurisdiction;
       marker.bindTooltip(tooltipHtml(permit), { direction: "top", offset: [0, -8] });
       marker.on("click", () => onSelect(permit));
       clusterGroup.addLayer(marker);
       markersById.set(permit.id, marker);
+    });
+
+    // A cluster bubble only shows a raw count by default -- hovering it
+    // shows which jurisdiction(s) actually make it up and how many of
+    // each, computed from its live child markers rather than baked in at
+    // cluster-creation time (clusters split/merge as you zoom).
+    clusterGroup.on("clustermouseover", (e) => {
+      const { layer: cluster } = e as ClusterMouseEvent;
+      cluster
+        .bindTooltip(clusterBreakdownHtml(cluster.getAllChildMarkers(), jurisdictions), {
+          direction: "top",
+          offset: [0, -10],
+          sticky: true,
+        })
+        .openTooltip();
+    });
+    clusterGroup.on("clustermouseout", (e) => {
+      (e as ClusterMouseEvent).layer.closeTooltip();
     });
 
     map.addLayer(clusterGroup);
