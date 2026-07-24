@@ -1,27 +1,16 @@
 "use client";
 
 import MetricsRow from "@/components/MetricsRow";
-import ChartCard from "@/components/charts/ChartCard";
-import HorizontalBarChart from "@/components/charts/HorizontalBarChart";
 import { usePermits } from "@/lib/usePermits";
 import { REGISTERED_JURISDICTIONS } from "@/lib/jurisdictions";
-import {
-  countByPermitType,
-  formatCompactCurrency,
-  topContractors,
-  valuationByJurisdiction,
-} from "@/lib/trends";
 
-// Overview is a pure at-a-glance summary -- unfiltered, no Filters sidebar,
-// no permit-level table. Slicing the data is what /table, /map, and
-// /trends are for; this page just answers "what's the state of things."
+// Overview is a pure at-a-glance summary -- unfiltered, no Filters
+// sidebar, no charts, no permit-level table. Just the headline numbers;
+// every chart lives on /trends and every other kind of drill-down lives
+// on /table or /map, so there's exactly one place each thing shows up.
 export default function OverviewPage() {
   const { permits, error, refresh } = usePermits();
   const allPermits = permits ?? [];
-
-  const byJurisdiction = valuationByJurisdiction(allPermits);
-  const byType = countByPermitType(allPermits);
-  const byContractor = topContractors(allPermits, 5);
 
   return (
     <div className="min-h-screen p-6 max-w-5xl mx-auto">
@@ -54,54 +43,10 @@ export default function OverviewPage() {
           in tad-permit-pipeline, then refresh.
         </p>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-3">
           <MetricsRow permits={allPermits} />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            <ChartCard
-              title="Valuation by jurisdiction"
-              tableColumns={["Jurisdiction", "Total valuation"]}
-              tableRows={byJurisdiction.map((d) => ({ label: d.label, value: formatCompactCurrency(d.value) }))}
-            >
-              <HorizontalBarChart
-                data={byJurisdiction}
-                valueFormat={formatCompactCurrency}
-                ariaLabel="Total permit valuation by jurisdiction"
-              />
-            </ChartCard>
-
-            <ChartCard
-              title="Permit type distribution"
-              tableColumns={["Permit type", "Count"]}
-              tableRows={byType.map((d) => ({ label: d.label, value: d.value.toLocaleString("en-US") }))}
-            >
-              <HorizontalBarChart
-                data={byType.slice(0, 6)}
-                valueFormat={(v) => v.toLocaleString("en-US")}
-                ariaLabel="Permit count by normalized type"
-              />
-            </ChartCard>
-
-            <ChartCard
-              title="Top contractors"
-              tableColumns={["Contractor", "Permits"]}
-              tableRows={byContractor.map((d) => ({
-                label: d.label,
-                value: d.value.toLocaleString("en-US"),
-                href: `/contractors/${encodeURIComponent(d.label)}`,
-              }))}
-            >
-              <HorizontalBarChart
-                data={byContractor}
-                valueFormat={(v) => v.toLocaleString("en-US")}
-                ariaLabel="Permit count by contractor"
-                linkFor={(label) => `/contractors/${encodeURIComponent(label)}`}
-              />
-            </ChartCard>
-          </div>
-
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Unfiltered, all jurisdictions — filter and drill down on Table, Map, or Trends.
+            Unfiltered, all jurisdictions — charts live on Trends, drill down on Table or Map.
           </p>
         </div>
       )}
