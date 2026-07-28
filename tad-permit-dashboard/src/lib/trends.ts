@@ -68,9 +68,31 @@ export interface ContractorSummary {
 const OWNER_SELF_PERFORMED_PATTERN = /^owner(?:[\s-]*builder)?$/i;
 const OWNER_SELF_PERFORMED_LABEL = "Owner (self-performed)";
 
+// Some sources' contractor_name comes through with its literal quote
+// characters still attached (e.g. `"OWNER"`, 7 characters including the
+// quotes) -- a leftover source-data artifact, not part of the name. Strips
+// one matching pair of wrapping quotes (straight or curly) so that value
+// canonicalizes the same as an unquoted "OWNER" would, instead of silently
+// surviving as a lookalike duplicate row.
+const WRAPPING_QUOTE_PAIRS: [string, string][] = [
+  ['"', '"'],
+  ["'", "'"],
+  ["“", "”"],
+  ["‘", "’"],
+];
+
+function stripWrappingQuotes(value: string): string {
+  for (const [open, close] of WRAPPING_QUOTE_PAIRS) {
+    if (value.length >= 2 && value.startsWith(open) && value.endsWith(close)) {
+      return value.slice(1, -1).trim();
+    }
+  }
+  return value;
+}
+
 export function canonicalContractorName(rawName: string): string {
-  const trimmed = rawName.trim();
-  return OWNER_SELF_PERFORMED_PATTERN.test(trimmed) ? OWNER_SELF_PERFORMED_LABEL : trimmed;
+  const cleaned = stripWrappingQuotes(rawName.trim());
+  return OWNER_SELF_PERFORMED_PATTERN.test(cleaned) ? OWNER_SELF_PERFORMED_LABEL : cleaned;
 }
 
 // Full contractor directory, descending by permit count -- the aggregation
