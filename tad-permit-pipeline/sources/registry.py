@@ -167,7 +167,7 @@ CAMBRIDGE_MAPPING = FieldMapping(
 
 
 SEATTLE_ALT_MAPPING = FieldMapping(
-    jurisdiction='seattle_alt',
+    jurisdiction='seattle',
     source_url='https://data.seattle.gov/resource/8tqq-u7ib.json',
     permit_id_field='permitnum',
     address_fields=('originaladdress1', 'originalcity', 'originalstate', 'originalzip'),
@@ -216,8 +216,8 @@ CINCINNATI_MAPPING = FieldMapping(
 )
 
 
-SACRAMENTO_MAPPING = FieldMapping(
-    jurisdiction='sacramento',
+VIRGINIA_BEACH_MAPPING = FieldMapping(
+    jurisdiction='virginia_beach',
     source_url='https://services2.arcgis.com/CyVvlIiUfRBmMQuu/arcgis/rest/services/Building_Permits_Applications_view/FeatureServer/0',
     permit_id_field='PermitNumber',
     address_fields=('StreetAddress', 'AddressUnit', 'City', 'State', 'Zip'),
@@ -295,6 +295,142 @@ COLUMBUS_MAPPING = FieldMapping(
     contractor_name_fields=(),
     permit_type_fields=('CONST_TYPE_CODE',),
     valuation_field=None,
+    square_footage_field=None,
+    scope_fields=(),
+    point_fields=(),
+)
+
+
+NEW_BERN_MAPPING = FieldMapping(
+    jurisdiction='new_bern',
+    source_url='https://gis.newbernnc.gov/arcgis/rest/services/Dev_Services/Building_Permits/FeatureServer/0',
+    permit_id_field='PERMIT_NO',
+    address_fields=('ADDRESS',),
+    address_separator=' ',
+    date_fields=('DATE_ISSUE',),
+    owner_name_fields=('OWN_FIRST', 'OWNER_LAST'),
+    contractor_name_fields=(),
+    permit_type_fields=('TYPE2', 'TYPE'),
+    valuation_field='EST_COST',
+    square_footage_field=None,
+    scope_fields=('DESCRIPT',),
+    point_fields=(),
+)
+
+
+DENVER_MAPPING_COMMERCIAL = FieldMapping(
+    jurisdiction='denver',
+    source_url='https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_DEV_COMMERCIALCONSTPERMIT_P/FeatureServer/317',
+    permit_id_field='PERMIT_NUM',
+    address_fields=('ADDRESS',),
+    address_separator=' ',
+    date_fields=('DATE_ISSUED', 'DATE_RECEIVED'),
+    owner_name_fields=(),
+    contractor_name_fields=('CONTRACTOR_NAME',),
+    permit_type_fields=('CLASS',),
+    valuation_field='VALUATION',
+    square_footage_field=None,
+    scope_fields=('LOCATION',),
+    point_fields=(),
+)
+
+
+DENVER_MAPPING_RESIDENTIAL = FieldMapping(
+    jurisdiction='denver',
+    source_url='https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_DEV_RESIDENTIALCONSTPERMIT_P/FeatureServer/316',
+    permit_id_field='PERMIT_NUM',
+    address_fields=('ADDRESS_NUMBER', 'ADDRESS_STREETDIR', 'ADDRESS_STREETNAME', 'ADDRESS_STREETTYPE', 'ADDRESS_UNITTYPE', 'ADDRESS_UNIT'),
+    address_separator=' ',
+    date_fields=('DATE_ISSUED', 'DATE_RECEIVED'),
+    owner_name_fields=(),
+    contractor_name_fields=('CONTRACTOR_NAME',),
+    permit_type_fields=('CLASS',),
+    valuation_field='VALUATION',
+    square_footage_field=None,
+    scope_fields=(),
+    point_fields=(),
+)
+
+
+NASHVILLE_MAPPING = FieldMapping(
+    jurisdiction='nashville',
+    source_url='https://services2.arcgis.com/HdTo6HJqh92wn4D8/arcgis/rest/services/Building_Permits_Issued_2/FeatureServer/0',
+    permit_id_field='Permit__',
+    address_fields=('Address', 'City', 'State', 'ZIP'),
+    address_separator=' ',
+    date_fields=('Date_Issued', 'Date_Entered'),
+    owner_name_fields=(),
+    contractor_name_fields=('Contact',),
+    permit_type_fields=('Permit_Type_Description', 'Permit_Subtype_Description', 'Per_Ty', 'Per_SubTy'),
+    valuation_field='Const_Cost',
+    square_footage_field=None,
+    scope_fields=('Purpose',),
+    point_fields=(),
+)
+
+
+RALEIGH_MAPPING = FieldMapping(
+    jurisdiction='raleigh',
+    source_url='https://services.arcgis.com/v400IkDOw1ad7Yad/arcgis/rest/services/Building_Permits/FeatureServer/0',
+    permit_id_field='permitnum',
+    address_fields=('streetnum', 'streetdirectionprefix', 'streetname', 'streettype', 'streetdirectionsuffix'),
+    address_separator=' ',
+    date_fields=('issueddate', 'applieddate'),
+    owner_name_fields=('parcelownername',),
+    contractor_name_fields=('contractorcompanyname', 'contractordba'),
+    permit_type_fields=('permittype', 'permittypemapped', 'workclass', 'workclassmapped', 'permitclass', 'permitclassmapped'),
+    valuation_field='estprojectcost',
+    square_footage_field='totalsqft',
+    scope_fields=('proposedworkdescription', 'description', 'perm_comments', 'reviewercomments'),
+    point_fields=(),
+)
+
+
+MIAMI_DADE_MAPPING = FieldMapping(
+    jurisdiction='miami_dade',
+    source_url='https://services.arcgis.com/8Pc9XBTAsYuxx9Ny/arcgis/rest/services/miamidade_permit_data/FeatureServer/0',
+    permit_id_field='PermitNumber',
+    address_fields=('PropertyAddress',),
+    address_separator=' ',
+    date_fields=('PermitIssuedDate', 'ApplicationDate'),
+    owner_name_fields=('OwnerName',),
+    contractor_name_fields=('ContractorName',),
+    permit_type_fields=('PermitType', 'ApplicationTypeDescription', 'ProposedUseDescription', 'CategoryDescription1'),
+    valuation_field='EstimatedValue',
+    square_footage_field='SquareFootage',
+    scope_fields=('DetailDescriptionComments',),
+    point_fields=(),
+)
+
+
+MINNEAPOLIS_MAPPING = FieldMapping(
+    jurisdiction='minneapolis',
+    source_url='https://services.arcgis.com/afSMGVsC7QlRK1kZ/arcgis/rest/services/CCS_Permits/FeatureServer/0',
+    permit_id_field='permitNumber',
+    address_fields=('Display',),
+    address_separator=' ',
+    date_fields=('issueDate',),
+    owner_name_fields=('fullName',),
+    contractor_name_fields=('applicantName',),
+    permit_type_fields=('permitType', 'workType', 'occupancyType'),
+    valuation_field='value',
+    square_footage_field=None,
+    scope_fields=('comments',),
+    point_fields=(),
+)
+
+
+SIOUX_FALLS_MAPPING = FieldMapping(
+    jurisdiction='sioux_falls',
+    source_url='https://gis.siouxfalls.gov/arcgis/rest/services/Data/Community/MapServer/3',
+    permit_id_field='PERMITNUMBER',
+    address_fields=('MAINADDRESS',),
+    address_separator=' ',
+    date_fields=('ISSUEDATE', 'APPLYDATE'),
+    owner_name_fields=(),
+    contractor_name_fields=('contractor_name',),
+    permit_type_fields=('PERMITTYPE', 'WORKCLASS'),
+    valuation_field='VALUATION',
     square_footage_field=None,
     scope_fields=(),
     point_fields=(),
@@ -394,11 +530,11 @@ SOURCES = {
         date_column="issueddate",
         mapper_func=build_mapper(CINCINNATI_MAPPING),
     ),
-    "sacramento": ArcGISFeatureSource(
-        name="sacramento",
+    "virginia_beach": ArcGISFeatureSource(
+        name="virginia_beach",
         url="https://services2.arcgis.com/CyVvlIiUfRBmMQuu/arcgis/rest/services/Building_Permits_Applications_view/FeatureServer/0",
         date_column="IssueDate",
-        mapper_func=build_mapper(SACRAMENTO_MAPPING),
+        mapper_func=build_mapper(VIRGINIA_BEACH_MAPPING),
     ),
     "albuquerque": ArcGISFeatureSource(
         name="albuquerque",
@@ -423,6 +559,54 @@ SOURCES = {
         url="https://gis.columbus.gov/arcgis/rest/services/Applications/Neighborhood/MapServer/41",
         date_column="ISSUED_YEAR",
         mapper_func=build_mapper(COLUMBUS_MAPPING),
+    ),
+    "new_bern": ArcGISFeatureSource(
+        name="new_bern",
+        url="https://gis.newbernnc.gov/arcgis/rest/services/Dev_Services/Building_Permits/FeatureServer/0",
+        date_column="DATE_ISSUE",
+        mapper_func=build_mapper(NEW_BERN_MAPPING),
+    ),
+    "denver_commercial": ArcGISFeatureSource(
+        name="denver_commercial",
+        url="https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_DEV_COMMERCIALCONSTPERMIT_P/FeatureServer/317",
+        date_column="DATE_ISSUED",
+        mapper_func=build_mapper(DENVER_MAPPING_COMMERCIAL),
+    ),
+    "denver_residential": ArcGISFeatureSource(
+            name="denver_residential",
+            url="https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_DEV_RESIDENTIALCONSTPERMIT_P/FeatureServer/317",
+            date_column="DATE_ISSUED",
+            mapper_func=build_mapper(DENVER_MAPPING_RESIDENTIAL),
+        ),
+    "nashville": ArcGISFeatureSource(
+        name="nashville",
+        url="https://services2.arcgis.com/HdTo6HJqh92wn4D8/arcgis/rest/services/Building_Permits_Issued_2/FeatureServer/0",
+        date_column="Date_Issued",
+        mapper_func=build_mapper(NASHVILLE_MAPPING),
+    ),
+    "raleigh": ArcGISFeatureSource(
+        name="raleigh",
+        url="https://services.arcgis.com/v400IkDOw1ad7Yad/arcgis/rest/services/Building_Permits/FeatureServer/0",
+        date_column="issueddate",
+        mapper_func=build_mapper(RALEIGH_MAPPING),
+    ),
+    "miami_dade": ArcGISFeatureSource(
+        name="miami_dade",
+        url="https://services.arcgis.com/8Pc9XBTAsYuxx9Ny/arcgis/rest/services/miamidade_permit_data/FeatureServer/0",
+        date_column="PermitIssuedDate",
+        mapper_func=build_mapper(MIAMI_DADE_MAPPING),
+    ),
+    "minneapolis": ArcGISFeatureSource(
+        name="minneapolis",
+        url="https://services.arcgis.com/afSMGVsC7QlRK1kZ/arcgis/rest/services/CCS_Permits/FeatureServer/0",
+        date_column="issueDate",
+        mapper_func=build_mapper(MINNEAPOLIS_MAPPING),
+    ),
+    "sioux_falls": ArcGISFeatureSource(
+        name="sioux_falls",
+        url="https://gis.siouxfalls.gov/arcgis/rest/services/Data/Community/MapServer/3",
+        date_column="ISSUEDATE",
+        mapper_func=build_mapper(SIOUX_FALLS_MAPPING),
     ),
 }
 
