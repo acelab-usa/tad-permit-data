@@ -269,6 +269,18 @@ function ClusteredMarkers({
 // magnitude gets one hue light-to-dark, not a spectrum, same rule the
 // rest of the dashboard's charts follow. No per-point click/tooltip:
 // a heat cell isn't one permit, so there's nothing meaningful to select.
+//
+// Radius/blur are left at fixed, moderate values -- leaflet.heat already
+// dampens per-point intensity based on how far the current zoom is below
+// `maxZoom` (points count for less the further you are from it), which
+// is the library's own answer to "the same point set looks far denser
+// zoomed out than zoomed in." Tried also scaling radius/blur by zoom on
+// top of that; the two compensations fought each other and produced a
+// washed-out white patch specifically in the zoom range close to
+// whatever maxZoom was set to (worse than either alone). Setting maxZoom
+// near the top of the usable range (individual-building detail) keeps
+// dampening active through the "looking at one city" zoom levels, where
+// it's actually needed.
 function HeatmapLayer({ permits }: { permits: Permit[] }) {
   const map = useMap();
   const idKey = permits.map((p) => p.id).join(",");
@@ -281,9 +293,9 @@ function HeatmapLayer({ permits }: { permits: Permit[] }) {
     ]);
 
     const heatLayer = L.heatLayer(points, {
-      radius: 22,
-      blur: 18,
-      maxZoom: 12,
+      radius: 20,
+      blur: 16,
+      maxZoom: 17,
       gradient: {
         0.0: "rgba(52, 211, 153, 0)",
         0.3: "rgba(52, 211, 153, 0.35)",
