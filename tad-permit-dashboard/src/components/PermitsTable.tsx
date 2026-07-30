@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Permit } from "@/lib/types";
 
 interface PermitsTableProps {
@@ -61,9 +61,18 @@ export default function PermitsTable({ permits, selectedId, onSelect }: PermitsT
   const start = (currentPage - 1) * PAGE_SIZE;
   const pageRows = sorted.slice(start, start + PAGE_SIZE);
 
+  // The row list scrolls independently of the page -- switching pages
+  // without resetting this would leave whatever scrollTop the previous
+  // page ended at, so a Next click while scrolled down lands partway
+  // into the new page's rows instead of at its top.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [currentPage]);
+
   return (
     <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[var(--chart-surface)] shadow-sm">
-      <div className="max-h-[32rem] overflow-y-auto overflow-x-auto">
+      <div ref={scrollRef} className="max-h-[32rem] overflow-y-auto overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-100 dark:bg-gray-800 sticky top-0 z-10">
             <tr>
