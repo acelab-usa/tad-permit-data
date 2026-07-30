@@ -9,7 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@types/leaflet.heat": "^0.2.5",
     "leaflet": "^1.9.4",
+    "leaflet.heat": "^0.2.0",
     "leaflet.markercluster": "^1.5.3",
     "next": "16.2.11",
     "react": "19.2.4",

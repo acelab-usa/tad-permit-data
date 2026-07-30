@@ -4,16 +4,20 @@ import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import L from "leaflet";
 import "leaflet.markercluster";
+import "leaflet.heat";
 import { useEffect, useRef } from "react";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import { colorForJurisdiction } from "@/lib/jurisdictionColors";
 import type { Permit } from "@/lib/types";
+
+export type MapViewMode = "markers" | "heatmap";
 
 interface PermitsMapProps {
   permits: Permit[]; // must already be filtered to permits with a valid lat/lon
   jurisdictions: string[]; // full known set, for stable per-jurisdiction coloring
   selectedId: number | null;
   onSelect: (permit: Permit) => void;
+  mode: MapViewMode;
 }
 
 const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795]; // continental US
@@ -185,7 +189,12 @@ function clusterBreakdownHtml(children: L.Marker[], jurisdictions: string[]): st
 // levels and split apart as you zoom in, so a dense cluster of permits
 // (e.g. downtown Chicago) stays clickable instead of a pile of
 // overlapping, unclickable dots.
-function ClusteredMarkers({ permits, jurisdictions, selectedId, onSelect }: PermitsMapProps) {
+function ClusteredMarkers({
+  permits,
+  jurisdictions,
+  selectedId,
+  onSelect,
+}: Omit<PermitsMapProps, "mode">) {
   const map = useMap();
   const markersByIdRef = useRef<Map<number, L.Marker>>(new Map());
   const idKey = permits.map((p) => p.id).join(",");
@@ -252,7 +261,49 @@ function ClusteredMarkers({ permits, jurisdictions, selectedId, onSelect }: Perm
   return null;
 }
 
-export default function PermitsMap({ permits, jurisdictions, selectedId, onSelect }: PermitsMapProps) {
+// A density view as an alternative to individual pins -- useful once a
+// filter still leaves thousands of points, where even clustered markers
+// are more "which bubble is biggest" than "where is this actually dense."
+// Single-hue gradient (brand accent green, ramping to a bright core at
+// the hottest point) rather than leaflet.heat's default rainbow --
+// magnitude gets one hue light-to-dark, not a spectrum, same rule the
+// rest of the dashboard's charts follow. No per-point click/tooltip:
+// a heat cell isn't one permit, so there's nothing meaningful to select.
+function HeatmapLayer({ permits }: { permits: Permit[] }) {
+  const map = useMap();
+  const idKey = permits.map((p) => p.id).join(",");
+
+  useEffect(() => {
+    const points: L.HeatLatLngTuple[] = permits.map((p) => [
+      p.latitude as number,
+      p.longitude as number,
+      1,
+    ]);
+
+    const heatLayer = L.heatLayer(points, {
+      radius: 22,
+      blur: 18,
+      maxZoom: 12,
+      gradient: {
+        0.0: "rgba(52, 211, 153, 0)",
+        0.3: "rgba(52, 211, 153, 0.35)",
+        0.6: "#34d399",
+        0.85: "#a7f3d0",
+        1.0: "#ffffff",
+      },
+    });
+
+    map.addLayer(heatLayer);
+    return () => {
+      map.removeLayer(heatLayer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idKey, map]);
+
+  return null;
+}
+
+export default function PermitsMap({ permits, jurisdictions, selectedId, onSelect, mode }: PermitsMapProps) {
   return (
     <MapContainer
       center={DEFAULT_CENTER}
@@ -278,12 +329,16 @@ export default function PermitsMap({ permits, jurisdictions, selectedId, onSelec
       />
       <SyncMapSize />
       <FitBounds permits={permits} />
-      <ClusteredMarkers
-        permits={permits}
-        jurisdictions={jurisdictions}
-        selectedId={selectedId}
-        onSelect={onSelect}
-      />
+      {mode === "heatmap" ? (
+        <HeatmapLayer permits={permits} />
+      ) : (
+        <ClusteredMarkers
+          permits={permits}
+          jurisdictions={jurisdictions}
+          selectedId={selectedId}
+          onSelect={onSelect}
+        />
+      )}
     </MapContainer>
   );
 }

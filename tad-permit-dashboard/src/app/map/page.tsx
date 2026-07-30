@@ -6,6 +6,7 @@ import Filters from "@/components/Filters";
 import PermitDetail from "@/components/PermitDetail";
 import { usePermits } from "@/lib/usePermits";
 import { REGISTERED_JURISDICTIONS } from "@/lib/jurisdictions";
+import type { MapViewMode } from "@/components/PermitsMap";
 import type { Permit } from "@/lib/types";
 
 // Leaflet touches `window` at module-eval time -- must never run during SSR.
@@ -17,6 +18,11 @@ const PermitsMap = dynamic(() => import("@/components/PermitsMap"), {
     </div>
   ),
 });
+
+const VIEW_MODES: { value: MapViewMode; label: string }[] = [
+  { value: "markers", label: "📍 Markers" },
+  { value: "heatmap", label: "🔥 Heatmap" },
+];
 
 export default function MapPage() {
   const {
@@ -31,6 +37,7 @@ export default function MapPage() {
     refresh,
   } = usePermits();
   const [selected, setSelected] = useState<Permit | null>(null);
+  const [viewMode, setViewMode] = useState<MapViewMode>("markers");
 
   const mappable = filtered.filter((p) => p.latitude !== null && p.longitude !== null);
   const unmapped = filtered.length - mappable.length;
@@ -79,13 +86,32 @@ export default function MapPage() {
             />
 
             <main className="flex-1 min-w-0 space-y-4">
-              <p className="text-sm text-gray-500">
-                Showing {mappable.length.toLocaleString("en-US")} of{" "}
-                {filtered.length.toLocaleString("en-US")} matched permits on the map
-                {unmapped > 0 &&
-                  ` (${unmapped.toLocaleString("en-US")} have no location data yet)`}
-                .
-              </p>
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <p className="text-sm text-gray-500">
+                  Showing {mappable.length.toLocaleString("en-US")} of{" "}
+                  {filtered.length.toLocaleString("en-US")} matched permits on the map
+                  {unmapped > 0 &&
+                    ` (${unmapped.toLocaleString("en-US")} have no location data yet)`}
+                  .
+                </p>
+
+                <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-700 overflow-hidden text-sm shrink-0">
+                  {VIEW_MODES.map(({ value, label }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setViewMode(value)}
+                      className={`px-3 py-1.5 transition-colors ${
+                        viewMode === value
+                          ? "bg-[var(--accent)] text-black font-medium"
+                          : "hover:bg-gray-50 dark:hover:bg-gray-800"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               {mappable.length === 0 ? (
                 <div className="h-[32rem] w-full rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center text-sm text-gray-400 text-center px-8">
@@ -103,6 +129,7 @@ export default function MapPage() {
                   jurisdictions={jurisdictionOptions}
                   selectedId={selected?.id ?? null}
                   onSelect={setSelected}
+                  mode={viewMode}
                 />
               )}
 
